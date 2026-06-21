@@ -20,11 +20,7 @@ export default function UpcomingAllPage() {
       const res = await fetchUpcomingAnime(p, 24)
       const data = res.data || []
       cacheAnimes(data)
-      setAnime((prev) => {
-        const combined = p === 1 ? data : [...prev, ...data];
-        // FIXED: State deduplication so React keys don't duplicate when loading more
-        return Array.from(new Map(combined.map(item => [item.mal_id, item])).values());
-      })
+      setAnime((prev) => p === 1 ? data : [...prev, ...data])
       setHasMore(res.pagination?.has_next_page ?? false)
     } catch (e) {
       console.error(e)
@@ -43,9 +39,9 @@ export default function UpcomingAllPage() {
 
   return (
     <div className="min-h-screen bg-bg">
-      <div className="max-w-7xl mx-auto px-4 py-8">
+      <div className="max-w-7xl mx-auto px-4 py-6">
         <div className="flex items-center gap-3 mb-6">
-          <Link to="/" className="text-text-muted hover:text-text-base transition-colors focus:outline-none">
+          <Link to="/" className="text-text-muted hover:text-text-base transition-colors">
             <ChevronLeft className="w-5 h-5" />
           </Link>
           <Calendar className="w-5 h-5 text-accent" />
@@ -64,13 +60,23 @@ export default function UpcomingAllPage() {
                 <AnimeCard key={a.mal_id} anime={a} isUpcoming />
               ))}
             </div>
-            {loading && <div className="mt-6"><GridSkeleton count={12} /></div>}
+
+            {loading && (
+              <div className="mt-6">
+                <GridSkeleton count={12} />
+              </div>
+            )}
+
             {!loading && hasMore && (
               <div className="mt-8 text-center">
-                <button onClick={loadMore} className="btn-accent px-6 py-2.5 rounded-xl text-sm focus:outline-none">
+                <button onClick={loadMore} className="btn-accent px-6 py-2.5 rounded-xl text-sm">
                   Load More
                 </button>
               </div>
+            )}
+
+            {!hasMore && anime.length > 0 && (
+              <p className="text-center text-text-muted text-sm mt-8">You've reached the end!</p>
             )}
           </>
         )}
