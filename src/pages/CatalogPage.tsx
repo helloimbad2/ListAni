@@ -30,10 +30,10 @@ export default function CatalogPage() {
     setLoading(true)
     try {
       let res
-      if (!f.query && !f.genres.length && !f.types.length && !f.ratings.length && !f.statuses.length && !f.years.length) {
-        res = await fetchTopAnime(p, 24)
+      if (!f.query && !f.genres.length && !f.excludedGenres?.length && !f.types.length && !f.ratings.length && !f.statuses.length && !f.years.length) {
+        res = await fetchTopAnime(p, 25)
       } else {
-        res = await fetchAnime({ ...f, page: p, limit: 24, order_by: 'popularity', sort: 'asc' })
+        res = await fetchAnime({ ...f, page: p, limit: 25, order_by: 'popularity', sort: 'asc' })
       }
       const data = res.data || []
       cacheAnimes(data)
@@ -112,7 +112,7 @@ export default function CatalogPage() {
             value={filters.query}
             onChange={(e) => handleFilterChange({ ...filters, query: e.target.value })}
             placeholder="Search by title, genre, studio..."
-            className="w-full bg-surface border border-white/[0.07] rounded-xl pl-9 pr-9 py-2.5 text-sm text-text-base placeholder:text-text-muted focus:outline-none focus:border-accent/50 transition-all"
+            className="w-full bg-surface border border-white/[0.07] rounded-2xl pl-9 pr-9 py-2.5 text-sm text-text-base placeholder:text-text-muted focus:outline-none focus:border-accent/50 focus:ring-0 transition-all shadow-sm shadow-black/20"
           />
           {filters.query && (
             <button

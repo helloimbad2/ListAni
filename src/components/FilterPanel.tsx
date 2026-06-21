@@ -18,8 +18,19 @@ export default function FilterPanel({ filters, onChange }: Props) {
 
   const toggle = (key: string) => setOpenSections((s) => ({ ...s, [key]: !s[key] }))
 
-  const toggleGenre = (id: number) =>
-    onChange({ ...filters, genres: filters.genres.includes(id) ? filters.genres.filter((g) => g !== id) : [...filters.genres, id] })
+  const toggleGenre = (id: number) => {
+    const isSelected = filters.genres.includes(id)
+    const isExcluded = filters.excludedGenres.includes(id)
+    if (isSelected) {
+      onChange({ ...filters, genres: filters.genres.filter((g) => g !== id), excludedGenres: [...filters.excludedGenres, id] })
+      return
+    }
+    if (isExcluded) {
+      onChange({ ...filters, excludedGenres: filters.excludedGenres.filter((g) => g !== id) })
+      return
+    }
+    onChange({ ...filters, genres: [...filters.genres, id] })
+  }
 
   const toggleType = (t: string) =>
     onChange({ ...filters, types: filters.types.includes(t) ? filters.types.filter((x) => x !== t) : [...filters.types, t] })
@@ -34,11 +45,11 @@ export default function FilterPanel({ filters, onChange }: Props) {
     onChange({ ...filters, years: filters.years.includes(y) ? filters.years.filter((x) => x !== y) : [...filters.years, y] })
 
   const activeCount =
-    filters.genres.length + filters.types.length + filters.ratings.length +
+    filters.genres.length + filters.excludedGenres.length + filters.types.length + filters.ratings.length +
     filters.statuses.length + filters.years.length + (filters.userList !== 'all' ? 1 : 0)
 
   const clearAll = () =>
-    onChange({ ...filters, genres: [], types: [], ratings: [], statuses: [], years: [], userList: 'all' })
+    onChange({ ...filters, genres: [], excludedGenres: [], types: [], ratings: [], statuses: [], years: [], userList: 'all' })
 
   return (
     <aside className="w-52 shrink-0 flex flex-col gap-1 font-body text-xs">
@@ -70,6 +81,7 @@ export default function FilterPanel({ filters, onChange }: Props) {
             <Checkbox
               key={`${g.id}-${i}`}
               checked={filters.genres.includes(g.id)}
+              exclude={filters.excludedGenres.includes(g.id)}
               label={g.name}
               onChange={() => toggleGenre(g.id)}
             />
@@ -130,7 +142,7 @@ function Section({ label, open, onToggle, children }: { label: string; open: boo
 }
 
 // ✅ Fixed: label has onClick so clicking anywhere on the row fires onChange
-function Checkbox({ checked, label, onChange }: { checked: boolean; label: string; onChange: () => void }) {
+function Checkbox({ checked, exclude, label, onChange }: { checked: boolean; exclude?: boolean; label: string; onChange: () => void }) {
   return (
     <label
       className="flex items-center gap-2 py-0.5 cursor-pointer group select-none"
@@ -138,15 +150,19 @@ function Checkbox({ checked, label, onChange }: { checked: boolean; label: strin
     >
       <div className={clsx(
         'w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 transition-all',
-        checked ? 'bg-accent border-accent' : 'border-white/20 group-hover:border-white/40'
+        exclude ? 'bg-rose-500/90 border-rose-500' : checked ? 'bg-accent border-accent' : 'border-white/20 group-hover:border-white/40'
       )}>
-        {checked && (
+        {exclude ? (
+          <svg className="w-2.5 h-2.5 text-white" viewBox="0 0 10 10">
+            <path d="M3 3L7 7M7 3L3 7" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+          </svg>
+        ) : checked && (
           <svg className="w-2.5 h-2.5 text-white" viewBox="0 0 10 10">
             <path d="M2 5l2.5 2.5L8 3" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         )}
       </div>
-      <span className={clsx('text-[11px] transition-colors leading-tight', checked ? 'text-accent font-600' : 'text-text-muted group-hover:text-text-base')}>
+      <span className={clsx('text-[11px] transition-colors leading-tight', checked || exclude ? 'text-accent font-600' : 'text-text-muted group-hover:text-text-base')}>
         {label}
       </span>
     </label>

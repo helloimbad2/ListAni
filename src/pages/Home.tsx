@@ -27,17 +27,32 @@ export default function Home() {
     fetchTopAnime(1, 10).then((res) => {
       const data = res.data || []
       setTop10(data); cacheAnimes(data)
-      if (data.length) setSpotlight(data[0])
+      if (data.length && !spotlight) setSpotlight(data[0])
     }).catch(() => {}).finally(() => setLoadingTop(false))
 
     fetchBrowseAnime(1, 12).then((res) => {
-      setBrowseAnime(res.data || []); cacheAnimes(res.data || [])
+      const data = res.data || []
+      setBrowseAnime(data); cacheAnimes(data)
+      if (data.length && !spotlight) setSpotlight(data[0])
     }).catch(() => {}).finally(() => setLoadingBrowse(false))
 
     fetchUpcomingAnime(1, 12).then((res) => {
-      setUpcoming(res.data || []); cacheAnimes(res.data || [])
+      const data = res.data || []
+      setUpcoming(data); cacheAnimes(data)
     }).catch(() => {}).finally(() => setLoadingUpcoming(false))
   }, [])
+
+  useEffect(() => {
+    if (!browseAnime.length && !top10.length) return
+    const rotating = setInterval(() => {
+      const pool = browseAnime.filter((anime) => anime.airing || anime.status === 'Currently Airing')
+      const source = pool.length ? pool : top10
+      if (!source.length) return
+      const index = Math.floor(Math.random() * source.length)
+      setSpotlight(source[index])
+    }, 7000)
+    return () => clearInterval(rotating)
+  }, [browseAnime, top10])
 
   // When a genre is selected → fetch top anime FOR that genre from the API
   // This is the correct approach — client-side filtering from global top 10
@@ -83,7 +98,7 @@ export default function Home() {
           <div className="flex-1">
             {spotlight && (
               <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-accent/30 bg-accent/10 text-accent text-xs font-display font-600 mb-3">
-                <Star className="w-3 h-3 fill-accent" /> #1 Rated · {spotlight.title_english || spotlight.title}
+                <Star className="w-3 h-3 fill-accent" /> Trending Now · {spotlight.title_english || spotlight.title}
               </div>
             )}
             <h1 className="font-display font-700 text-4xl sm:text-5xl text-text-base leading-tight mb-3">
