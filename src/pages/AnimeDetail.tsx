@@ -32,7 +32,6 @@ export default function AnimeDetail() {
   useEffect(() => {
     setLoading(true); setAnime(null); setImgErr(false); setExpanded(false); setSimilar([])
     if (animeCache[malId]) setAnime(animeCache[malId])
-
     fetchAnimeById(malId).then((res) => {
       setAnime(res.data)
       addRecentlyViewed(res.data)
@@ -41,9 +40,7 @@ export default function AnimeDetail() {
     }).catch(console.error).finally(() => setLoading(false))
   }, [id])
 
-  if (loading && !anime) return (
-    <div className="min-h-screen bg-bg flex items-center justify-center"><Spinner size="lg" /></div>
-  )
+  if (loading && !anime) return <div className="min-h-screen bg-bg flex items-center justify-center"><Spinner size="lg" /></div>
   if (!anime) return (
     <div className="min-h-screen bg-bg flex flex-col items-center justify-center gap-3">
       <p className="text-text-muted">Anime not found.</p>
@@ -56,34 +53,35 @@ export default function AnimeDetail() {
   const synopsis = anime.synopsis?.replace(/\[Written by MAL Rewrite\]/gi, '').trim()
   const synopsisShort = synopsis && synopsis.length > 500 ? synopsis.slice(0, 500) + '...' : synopsis
   const scoreColor = anime.score ? (anime.score >= 8 ? 'text-green-400' : anime.score >= 7 ? 'text-yellow-400' : 'text-text-muted') : 'text-text-muted'
-
-  // Score ring: 0-10 → 0-100%
-  const scorePercent = anime.score ? (anime.score / 10) * 100 : 0
-  const circumference = 2 * Math.PI * 20 // r=20
-  const dash = (scorePercent / 100) * circumference
+  const circumference = 2 * Math.PI * 20
+  const dash = anime.score ? (anime.score / 10) * circumference : 0
 
   return (
     <div className="min-h-screen bg-bg">
-      {/* Banner blur */}
-      <div className="relative h-48 overflow-hidden">
-        <img src={imgUrl} alt="" className="w-full h-full object-cover opacity-25 blur-2xl scale-110" />
+      {/* Banner — pointer-events-none so it NEVER blocks clicks */}
+      <div className="absolute left-0 right-0 h-56 overflow-hidden pointer-events-none z-0" style={{ top: 64 }}>
+        <img src={imgUrl} alt="" className="w-full h-full object-cover opacity-20 blur-2xl scale-110" />
         <div className="absolute inset-0 bg-gradient-to-b from-transparent to-bg" />
+        <div className="absolute inset-0 bg-gradient-to-r from-bg/60 to-transparent" />
       </div>
 
-      <div className="max-w-5xl mx-auto px-4 -mt-20 pb-16">
-        <div className="mb-4">
-          <Link to="/catalog" className="inline-flex items-center gap-1.5 text-text-muted hover:text-text-base text-sm transition-colors">
-            <ChevronLeft className="w-4 h-4" /> Back to Catalog
-          </Link>
-        </div>
+      {/* All content — relative z-10 so it's always above the banner */}
+      <div className="relative z-10 max-w-5xl mx-auto px-4 pt-6 pb-16">
+        {/* Back link — always clickable */}
+        <Link
+          to="/catalog"
+          className="inline-flex items-center gap-1.5 text-text-muted hover:text-text-base text-sm transition-colors mb-8 group"
+        >
+          <ChevronLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
+          Back to Catalog
+        </Link>
 
         <div className="flex flex-col md:flex-row gap-8">
           {/* Poster */}
           <div className="shrink-0 flex flex-col gap-3">
             <div className="w-44 md:w-52 rounded-2xl overflow-hidden border border-white/[0.08] bg-[#0a0b12] shadow-2xl shadow-black/60">
               {!imgErr ? (
-                <img src={imgUrl} alt={displayTitle} onError={() => setImgErr(true)}
-                  className="w-full object-contain block" />
+                <img src={imgUrl} alt={displayTitle} onError={() => setImgErr(true)} className="w-full object-contain block" />
               ) : (
                 <div className="w-full h-72 flex items-center justify-center p-4">
                   <span className="font-display text-text-dim text-sm text-center">{displayTitle}</span>
@@ -101,7 +99,7 @@ export default function AnimeDetail() {
             {!isUpcoming && (
               <button onClick={() => toggleFinished(anime)}
                 className={clsx('w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-display font-600 transition-all',
-                  isFinished ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-900/30' : 'btn-ghost')}>
+                  isFinished ? 'bg-emerald-600 text-white' : 'btn-ghost')}>
                 <Check className="w-4 h-4" />
                 {isFinished ? 'Finished Watching' : 'Mark as Finished'}
               </button>
@@ -119,11 +117,7 @@ export default function AnimeDetail() {
           <div className="flex-1 min-w-0">
             {anime.status && (
               <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-display font-600 border mb-3"
-                style={{
-                  background: anime.airing ? 'rgba(34,197,94,0.1)' : 'rgba(255,255,255,0.04)',
-                  borderColor: anime.airing ? 'rgba(34,197,94,0.3)' : 'rgba(255,255,255,0.08)',
-                  color: anime.airing ? '#4ade80' : '#7878a0',
-                }}>
+                style={{ background: anime.airing ? 'rgba(34,197,94,0.1)' : 'rgba(255,255,255,0.04)', borderColor: anime.airing ? 'rgba(34,197,94,0.3)' : 'rgba(255,255,255,0.08)', color: anime.airing ? '#4ade80' : '#7878a0' }}>
                 {anime.airing && <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />}
                 {anime.status}
               </div>
@@ -132,18 +126,15 @@ export default function AnimeDetail() {
             <h1 className="font-display font-700 text-3xl text-text-base leading-tight mb-1">{displayTitle}</h1>
             {anime.title_japanese && <p className="text-text-muted text-sm mb-4">{anime.title_japanese}</p>}
 
-            {/* Score row with ring */}
+            {/* Score + stats */}
             <div className="flex items-center gap-5 mb-6 flex-wrap">
               {anime.score && (
                 <div className="flex items-center gap-3">
-                  {/* Animated score ring */}
                   <svg width="52" height="52" viewBox="0 0 52 52" className="-rotate-90">
                     <circle cx="26" cy="26" r="20" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="4" />
                     <circle cx="26" cy="26" r="20" fill="none"
                       stroke={anime.score >= 8 ? '#4ade80' : anime.score >= 7 ? '#facc15' : '#f97316'}
-                      strokeWidth="4" strokeLinecap="round"
-                      strokeDasharray={`${dash} ${circumference}`}
-                      style={{ transition: 'stroke-dasharray 1s ease' }} />
+                      strokeWidth="4" strokeLinecap="round" strokeDasharray={`${dash} ${circumference}`} />
                   </svg>
                   <div>
                     <p className={`font-display font-700 text-2xl leading-none ${scoreColor}`}>{anime.score.toFixed(2)}</p>
@@ -172,18 +163,15 @@ export default function AnimeDetail() {
             </div>
 
             {/* Genres */}
-            {(anime.genres?.length || anime.themes?.length || anime.demographics?.length) ? (
+            {[...(anime.genres || []), ...(anime.themes || []), ...(anime.demographics || [])].length > 0 && (
               <div className="flex flex-wrap gap-1.5 mb-6">
                 {[...(anime.genres || []), ...(anime.themes || []), ...(anime.demographics || [])].map((g) => (
-                  <Link key={g.mal_id} to={`/catalog?genres=${g.mal_id}`}
-                    className="genre-pill px-3 py-1 rounded-full text-xs font-600 font-display">
-                    {g.name}
-                  </Link>
+                  <Link key={g.mal_id} to={`/catalog?genres=${g.mal_id}`} className="genre-pill px-3 py-1 rounded-full text-xs font-600 font-display">{g.name}</Link>
                 ))}
               </div>
-            ) : null}
+            )}
 
-            {/* Metadata grid — FIXED ALIGNMENT */}
+            {/* Metadata — fixed alignment */}
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 mb-6">
               <MetaItem icon={<Tv className="w-3.5 h-3.5" />} label="Type" value={anime.type || '—'} />
               <MetaItem icon={<Layers className="w-3.5 h-3.5" />} label="Episodes" value={anime.episodes ? String(anime.episodes) : 'Unknown'} />
@@ -194,7 +182,7 @@ export default function AnimeDetail() {
             </div>
 
             {/* Studios & Producers */}
-            {(anime.studios?.length || anime.producers?.length) && (
+            {(anime.studios?.length || anime.producers?.length) ? (
               <div className="flex flex-col gap-3 mb-6">
                 {anime.studios && anime.studios.length > 0 && (
                   <div>
@@ -217,15 +205,14 @@ export default function AnimeDetail() {
                   </div>
                 )}
               </div>
-            )}
+            ) : null}
 
-            {/* Synopsis */}
             {synopsis && (
               <div>
                 <p className="text-[10px] font-display font-600 text-text-dim uppercase tracking-wider mb-2">Synopsis</p>
                 <p className="text-text-muted text-sm leading-relaxed">{expanded ? synopsis : synopsisShort}</p>
                 {synopsis.length > 500 && (
-                  <button onClick={() => setExpanded((e) => !e)} className="text-accent text-xs font-600 mt-2 hover:text-accent-light transition-colors">
+                  <button onClick={() => setExpanded(e => !e)} className="text-accent text-xs font-600 mt-2 hover:text-accent-light transition-colors">
                     {expanded ? 'Show less' : 'Read more'}
                   </button>
                 )}
@@ -252,10 +239,10 @@ function MetaItem({ icon, label, value }: { icon: React.ReactNode; label: string
   return (
     <div className="p-3 rounded-xl bg-surface border border-white/[0.06]">
       <div className="flex items-center gap-1.5 mb-2">
-        <span className="text-text-muted shrink-0">{icon}</span>
+        <span className="text-text-muted flex-shrink-0 flex items-center">{icon}</span>
         <p className="text-[10px] font-display font-600 text-text-dim uppercase tracking-wider leading-none">{label}</p>
       </div>
-      <p className="text-sm font-display font-600 text-text-base leading-snug">{value}</p>
+      <p className="text-sm font-display font-600 text-text-base">{value}</p>
     </div>
   )
 }

@@ -263,15 +263,41 @@ export default function TierListPage() {
 
           {/* PNG-exported section: only ranked tiers, no "Drop here" text */}
           <div ref={rankedRef} className="flex flex-col gap-1.5 p-4 rounded-2xl bg-[#0c0c15]">
-            {/* Centered watermark header */}
-            <div className="flex items-center justify-center gap-2 mb-4 pb-3 border-b border-white/[0.06]">
-              <div className="w-5 h-5 rounded bg-accent flex items-center justify-center shadow-sm shadow-accent/30">
-                <svg width="10" height="10" viewBox="0 0 32 32" fill="none">
+            {/* Watermark — inline styles so html2canvas renders it correctly */}
+            <div style={{
+              textAlign: 'center',
+              marginBottom: '16px',
+              paddingBottom: '12px',
+              borderBottom: '1px solid rgba(255,255,255,0.06)',
+              lineHeight: '20px',
+            }}>
+              <span style={{
+                display: 'inline-block',
+                width: '20px',
+                height: '20px',
+                borderRadius: '5px',
+                background: '#e8630a',
+                verticalAlign: 'middle',
+                marginRight: '8px',
+                textAlign: 'center',
+                lineHeight: '20px',
+              }}>
+                <svg width="10" height="10" viewBox="0 0 32 32" fill="none" style={{ verticalAlign: 'middle', display: 'inline-block', marginTop: '-2px' }}>
                   <path d="M16 4L19.5 12H28L21.5 17.5L24 26L16 21L8 26L10.5 17.5L4 12H12.5L16 4Z" fill="white"/>
                 </svg>
-              </div>
-              <span className="font-display font-700 text-sm text-text-muted tracking-wide">
-                List<span className="text-accent">Anime</span> · Tier List
+              </span>
+              <span style={{
+                fontFamily: 'Space Grotesk, Inter, system-ui, sans-serif',
+                fontWeight: 700,
+                fontSize: '14px',
+                lineHeight: '20px',
+                verticalAlign: 'middle',
+                color: '#7878a0',
+                letterSpacing: '0.02em',
+              }}>
+                List<span style={{ color: '#e8630a' }}>Anime</span>
+                <span style={{ color: '#3a3a52', margin: '0 6px' }}>·</span>
+                Tier List
               </span>
             </div>
 

@@ -8,12 +8,10 @@ async function req<T>(path: string, params: Record<string, string | number | und
   const wait = Math.max(0, DELAY - (Date.now() - lastReq))
   if (wait > 0) await new Promise((r) => setTimeout(r, wait))
   lastReq = Date.now()
-
   const url = new URL(`${BASE}${path}`)
   Object.entries(params).forEach(([k, v]) => {
     if (v !== undefined && v !== null && v !== '') url.searchParams.set(k, String(v))
   })
-
   const res = await fetch(url.toString())
   if (res.status === 429) {
     await new Promise((r) => setTimeout(r, 1600))
@@ -30,12 +28,26 @@ function dedupe(arr: Anime[]): Anime[] {
   return arr.filter((a) => { if (seen.has(a.mal_id)) return false; seen.add(a.mal_id); return true })
 }
 
-// sfw=true removes Rx (hentai) but keeps R+ (ecchi) — exactly what we want
 const SFW = { sfw: 'true' }
 
 export async function fetchTopAnime(page = 1, limit = 25): Promise<JikanResponse<Anime[]>> {
   const res: JikanResponse<Anime[]> = await req('/top/anime', { page, limit, ...SFW })
   return { ...res, data: dedupe(res.data || []) }
+}
+
+// Fetch top anime for specific genres — used by the home page genre filter
+// Uses /anime endpoint with genre filter + score ordering to get the TRUE top-rated
+// for that genre (not just client-side filter from global top 10)
+export async function fetchTopByGenres(genreIds: number[], limit = 10): Promise<Anime[]> {
+  const res: JikanResponse<Anime[]> = await req('/anime', {
+    genres: genreIds.join(','),
+    order_by: 'score',
+    sort: 'desc',
+    limit,
+    min_score: 6,
+    ...SFW,
+  })
+  return dedupe(res.data || [])
 }
 
 export async function fetchAnime(
@@ -50,7 +62,6 @@ export async function fetchAnime(
   if (filters.types?.length === 1) params.type = filters.types[0].toLowerCase()
   if (filters.ratings?.length === 1) params.rating = filters.ratings[0]
   if (filters.statuses?.length === 1) params.status = filters.statuses[0]
-  // genres + themes in one param (Jikan v4 supports comma-separated for both)
   if (filters.genres?.length) params.genres = filters.genres.join(',')
   if (filters.years?.length) {
     const sorted = [...filters.years].sort()
@@ -86,7 +97,7 @@ export async function fetchSimilarAnime(genres: number[], excludeId: number, lim
   } catch { return [] }
 }
 
-export async function searchAnime(q: string, limit = 12): Promise<JikanResponse<Anime[]>> {
+export async function searchAnime(q: string, limit = 8): Promise<JikanResponse<Anime[]>> {
   const res: JikanResponse<Anime[]> = await req('/anime', { q: q.trim(), limit, order_by: 'members', sort: 'desc', ...SFW })
   return { ...res, data: dedupe(res.data || []) }
 }
