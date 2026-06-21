@@ -1,0 +1,150 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --scrollbar-w: 6px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: #080811;
+  color: #f0f0f8;
+  font-family: 'Inter', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: var(--scrollbar-w);
+  height: var(--scrollbar-w);
+}
+::-webkit-scrollbar-track {
+  background: #0f1018;
+}
+::-webkit-scrollbar-thumb {
+  background: #2a2a3a;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3a3a52;
+}
+
+/* Focus visible */
+:focus-visible {
+  outline: 2px solid #e8630a;
+  outline-offset: 2px;
+}
+
+/* Tier colors */
+.tier-label-S { color: #ff5757; border-color: #ff5757; background: rgba(255,87,87,0.1); }
+.tier-label-A { color: #ffbe4f; border-color: #ffbe4f; background: rgba(255,190,79,0.1); }
+.tier-label-B { color: #4fbdff; border-color: #4fbdff; background: rgba(79,189,255,0.1); }
+.tier-label-C { color: #4fdb8e; border-color: #4fdb8e; background: rgba(79,219,142,0.1); }
+.tier-label-D { color: #c084fc; border-color: #c084fc; background: rgba(192,132,252,0.1); }
+.tier-label-F { color: #6b7280; border-color: #6b7280; background: rgba(107,114,128,0.1); }
+.tier-label-unranked { color: #7878a0; border-color: #3a3a52; background: rgba(58,58,82,0.3); }
+
+/* Tier row highlight */
+.tier-row-over {
+  outline: 2px dashed #4fbdff !important;
+  outline-offset: -2px;
+  background: rgba(79,189,255,0.04) !important;
+}
+
+/* Drag overlay shadow */
+.drag-overlay-card {
+  box-shadow: 0 20px 60px rgba(0,0,0,0.7), 0 0 0 2px rgba(232,99,10,0.5);
+  transform: rotate(2deg) scale(1.05);
+}
+
+/* Score badge */
+.score-badge {
+  background: linear-gradient(135deg, rgba(232,99,10,0.15), rgba(232,99,10,0.05));
+  border: 1px solid rgba(232,99,10,0.3);
+}
+
+/* Rank number behind card */
+.rank-number {
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 7rem;
+  line-height: 1;
+  color: rgba(255,255,255,0.03);
+  user-select: none;
+  pointer-events: none;
+  position: absolute;
+  bottom: -0.5rem;
+  left: -1rem;
+}
+
+/* Genre pill */
+.genre-pill {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.08);
+  transition: all 0.15s ease;
+}
+.genre-pill:hover, .genre-pill.active {
+  background: rgba(232,99,10,0.15);
+  border-color: rgba(232,99,10,0.4);
+  color: #f97316;
+}
+
+/* Checkbox filter */
+.filter-checkbox:checked + .filter-check-label {
+  color: #f97316;
+}
+
+/* Card image container */
+.anime-img-contain {
+  object-fit: contain;
+  background-color: #0a0b12;
+  width: 100%;
+  height: 100%;
+}
+
+/* Shimmer loading */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.shimmer {
+  background: linear-gradient(90deg, #161720 25%, #1e1f2b 50%, #161720 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+/* View More button pulse */
+.btn-accent {
+  background: #e8630a;
+  color: #fff;
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+.btn-accent:hover {
+  background: #f97316;
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px rgba(232,99,10,0.3);
+}
+.btn-ghost {
+  background: rgba(255,255,255,0.05);
+  color: #f0f0f8;
+  border: 1px solid rgba(255,255,255,0.08);
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+.btn-ghost:hover {
+  background: rgba(255,255,255,0.09);
+  border-color: rgba(255,255,255,0.15);
+  transform: translateY(-1px);
+}
