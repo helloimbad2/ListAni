@@ -22,136 +22,131 @@ export default function Home() {
   const genreReqRef = useRef(0)
   const cacheAnimes = useStore((s) => s.cacheAnimes)
 
-  // Load global top 10 + browse + upcoming on mount
   useEffect(() => {
     fetchTopAnime(1, 10).then((res) => {
       const data = res.data || []
-      setTop10(data); cacheAnimes(data)
-      if (data.length) setSpotlight(data[0])
-    }).catch(() => {}).finally(() => setLoadingTop(false))
+      cacheAnimes(data)
+      setTop10(data)
+      setGenreAnime(data)
+    }).finally(() => setLoadingTop(false))
 
+    // FIXED: Limits accurately set to 12
     fetchBrowseAnime(1, 12).then((res) => {
-      setBrowseAnime(res.data || []); cacheAnimes(res.data || [])
-    }).catch(() => {}).finally(() => setLoadingBrowse(false))
+      const data = res.data || []
+      cacheAnimes(data)
+      setBrowseAnime(data)
+    }).finally(() => setLoadingBrowse(false))
 
     fetchUpcomingAnime(1, 12).then((res) => {
-      setUpcoming(res.data || []); cacheAnimes(res.data || [])
-    }).catch(() => {}).finally(() => setLoadingUpcoming(false))
+      const data = res.data || []
+      cacheAnimes(data)
+      setUpcoming(data)
+    }).finally(() => setLoadingUpcoming(false))
   }, [])
 
-  // When a genre is selected → fetch top anime FOR that genre from the API
-  // This is the correct approach — client-side filtering from global top 10
-  // misses anime that are #1 in a genre but not in the global top 10
+  // FIXED: Rotates top airing anime every 6 seconds!
   useEffect(() => {
-    if (selectedGenres.length === 0) { setGenreAnime([]); return }
+    if (browseAnime.length > 0) {
+      setSpotlight(browseAnime[0])
+      let idx = 0
+      const interval = setInterval(() => {
+        idx = (idx + 1) % Math.min(browseAnime.length, 5)
+        setSpotlight(browseAnime[idx])
+      }, 6000)
+      return () => clearInterval(interval)
+    }
+  }, [browseAnime])
 
+  useEffect(() => {
+    if (selectedGenres.length === 0) {
+      setGenreAnime(top10)
+      return
+    }
     const reqId = ++genreReqRef.current
     setLoadingGenre(true)
     fetchTopByGenres(selectedGenres, 10).then((data) => {
-      if (reqId !== genreReqRef.current) return // stale
-      setGenreAnime(data); cacheAnimes(data)
-    }).catch(() => {}).finally(() => {
+      if (reqId === genreReqRef.current) {
+        cacheAnimes(data)
+        setGenreAnime(data)
+        setLoadingGenre(false)
+      }
+    }).catch(() => {
       if (reqId === genreReqRef.current) setLoadingGenre(false)
     })
-  }, [selectedGenres])
+  }, [selectedGenres, top10])
 
-  // What to show in the top section
-  const displayAnime = selectedGenres.length > 0 ? genreAnime : top10
-  const displayLoading = selectedGenres.length > 0 ? loadingGenre : loadingTop
+  const heroImg = spotlight ? getImageUrl(spotlight, 'large') : ''
 
   return (
-    <main className="min-h-screen bg-bg">
-      {/* Spotlight hero */}
-      <section className="relative overflow-hidden min-h-[340px] flex items-end border-b border-white/[0.06]">
+    <div className="min-h-screen bg-bg">
+      {/* Spotlight Header */}
+      <section className="relative overflow-hidden pt-12 pb-24 lg:pt-20 lg:pb-32 min-h-[400px]">
         {spotlight && (
-          <div className="absolute inset-0 pointer-events-none">
-            <img src={getImageUrl(spotlight, 'large')} alt=""
-              className="w-full h-full object-cover opacity-15 blur-2xl scale-110" />
-            <div className="absolute inset-0 bg-gradient-to-t from-bg via-bg/75 to-bg/30" />
-            <div className="absolute inset-0 bg-gradient-to-r from-bg/70 to-transparent" />
-          </div>
+          <div 
+            className="absolute inset-0 z-0 bg-cover bg-center opacity-30 blur-3xl scale-110 transition-all duration-1000"
+            style={{ backgroundImage: `url(${heroImg})` }}
+          />
         )}
-        <div className="relative max-w-7xl mx-auto px-4 py-12 w-full flex items-end gap-8">
+        <div className="absolute inset-0 z-0 bg-gradient-to-b from-bg/40 via-bg/80 to-bg" />
+        
+        <div className="relative z-10 max-w-7xl mx-auto px-4 flex flex-col items-center text-center">
+          <h1 className="font-display font-700 text-4xl sm:text-5xl text-text-base leading-tight mb-3">
+            Discover Anime.<br />
+            <span className="text-accent">Rank Your Favorites.</span>
+          </h1>
+          <p className="max-w-xl text-text-muted text-base sm:text-lg mb-8">
+            Explore the top-rated catalog, save your watchlist, and organize your ultimate tier list.
+          </p>
+          <Link to="/catalog" className="btn-accent px-8 py-3 rounded-xl text-sm shadow-[0_0_40px_rgba(232,99,10,0.4)]">
+            Browse Catalog
+          </Link>
+
           {spotlight && (
-            <Link to={`/anime/${spotlight.mal_id}`} className="hidden md:block shrink-0 group">
-              <div className="w-28 rounded-xl overflow-hidden border border-white/10 shadow-2xl shadow-black/60 group-hover:scale-105 transition-transform">
-                <img src={getImageUrl(spotlight, 'large')} alt={spotlight.title_english || spotlight.title}
-                  className="w-full object-contain bg-[#0a0b12]" />
+            <div className="mt-8 animate-fade-in flex items-center gap-3 bg-white/[0.03] border border-white/[0.08] backdrop-blur-md rounded-2xl p-2 pr-5 cursor-pointer hover:bg-white/[0.06] transition-colors" onClick={() => window.location.href = `/anime/${spotlight.mal_id}`}>
+              <img src={getImageUrl(spotlight, 'small')} alt="" className="w-10 h-10 object-cover rounded-xl" />
+              <div className="text-left">
+                <div className="text-[10px] uppercase tracking-wider text-accent font-700 font-display">Top Airing Right Now</div>
+                <div className="text-sm font-600 text-text-base line-clamp-1">{spotlight.title_english || spotlight.title}</div>
               </div>
-            </Link>
+            </div>
           )}
-          <div className="flex-1">
-            {spotlight && (
-              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-accent/30 bg-accent/10 text-accent text-xs font-display font-600 mb-3">
-                <Star className="w-3 h-3 fill-accent" /> #1 Rated · {spotlight.title_english || spotlight.title}
-              </div>
-            )}
-            <h1 className="font-display font-700 text-4xl sm:text-5xl text-text-base leading-tight mb-3">
-              Discover Anime.<br />
-              <span className="text-accent">Rank Your Favorites.</span>
-            </h1>
-            <p className="text-text-muted text-base leading-relaxed max-w-md">
-              Browse thousands of titles, curate your watchlist, and build the definitive tier list.
-            </p>
-            <div className="flex gap-2 mt-5 flex-wrap">
-              <Link to="/catalog" className="btn-accent px-5 py-2.5 rounded-xl text-sm inline-flex items-center gap-1.5">
-                Browse Catalog <ArrowRight className="w-4 h-4" />
-              </Link>
-              <Link to="/tierlist" className="btn-ghost px-5 py-2.5 rounded-xl text-sm">Build Tier List</Link>
+        </div>
+      </section>
+
+      {/* Top 10 Section */}
+      <section className="max-w-7xl mx-auto px-4 py-10">
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-6">
+          <div className="flex items-center gap-3 shrink-0">
+            <Star className="w-5 h-5 text-accent fill-accent" />
+            <div>
+              <h2 className="font-display font-700 text-xl text-text-base">Top 10 Anime</h2>
+              <p className="text-text-muted text-sm">Highest rated of all time</p>
             </div>
           </div>
+          <div className="w-full md:w-auto overflow-hidden">
+            <GenreFilter selected={selectedGenres} onChange={setSelectedGenres} />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+          {(loadingTop || loadingGenre)
+            ? Array.from({ length: 10 }).map((_, i) => <CardSkeleton key={i} />)
+            : genreAnime.map((a, i) => <AnimeCard key={a.mal_id} anime={a} rank={i + 1} />)
+          }
         </div>
       </section>
 
-      {/* Top 10 / Top by genre */}
-      <section className="max-w-7xl mx-auto px-4 py-10">
-        <div className="flex items-center gap-3 mb-1">
-          <Star className="w-5 h-5 text-accent fill-accent" />
-          <h2 className="font-display font-700 text-xl text-text-base">
-            {selectedGenres.length === 0 ? 'Top 10 Anime of All Time' : `Top Anime · Filtered by Genre`}
-          </h2>
-        </div>
-        <p className="text-text-muted text-sm mb-5">
-          {selectedGenres.length === 0
-            ? 'Ranked by MAL score · Select a genre to filter'
-            : 'Highest-rated anime matching your selected genre(s)'}
-        </p>
-
-        <div className="mb-6">
-          <GenreFilter selected={selectedGenres} onChange={setSelectedGenres} />
-        </div>
-
-        {displayLoading ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-            {Array.from({ length: 10 }).map((_, i) => <CardSkeleton key={i} />)}
-          </div>
-        ) : displayAnime.length === 0 ? (
-          <div className="text-center py-16 text-text-muted text-sm">
-            No results found for the selected genre(s).
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-            {displayAnime.map((anime, i) => (
-              <div key={anime.mal_id} className="relative">
-                <span className="rank-number">{String(i + 1).padStart(2, '0')}</span>
-                <AnimeCard anime={anime} rank={i + 1} />
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-
-      {/* Browse Anime */}
+      {/* Browse Airing */}
       <section className="max-w-7xl mx-auto px-4 py-10 border-t border-white/[0.06]">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <TrendingUp className="w-5 h-5 text-accent" />
             <div>
               <h2 className="font-display font-700 text-xl text-text-base">Browse Anime</h2>
-              <p className="text-text-muted text-sm">Currently airing · Sorted by popularity</p>
+              <p className="text-text-muted text-sm">Currently airing favorites</p>
             </div>
           </div>
-          <Link to="/browse" className="btn-ghost px-4 py-2 rounded-xl text-sm inline-flex items-center gap-1.5">
+          <Link to="/browse" className="btn-ghost px-4 py-2 rounded-xl text-sm inline-flex items-center gap-1.5 focus:outline-none">
             View More <ArrowRight className="w-4 h-4" />
           </Link>
         </div>
@@ -160,11 +155,6 @@ export default function Home() {
             {browseAnime.map((a) => <AnimeCard key={a.mal_id} anime={a} showStatus />)}
           </div>
         )}
-        <div className="mt-8 text-center">
-          <Link to="/browse" className="btn-accent px-6 py-2.5 rounded-xl text-sm inline-flex items-center gap-1.5">
-            View More <ArrowRight className="w-4 h-4" />
-          </Link>
-        </div>
       </section>
 
       {/* Upcoming */}
@@ -177,7 +167,7 @@ export default function Home() {
               <p className="text-text-muted text-sm">Coming soon this season</p>
             </div>
           </div>
-          <Link to="/upcoming" className="btn-ghost px-4 py-2 rounded-xl text-sm inline-flex items-center gap-1.5">
+          <Link to="/upcoming" className="btn-ghost px-4 py-2 rounded-xl text-sm inline-flex items-center gap-1.5 focus:outline-none">
             View More <ArrowRight className="w-4 h-4" />
           </Link>
         </div>
@@ -186,12 +176,7 @@ export default function Home() {
             {upcoming.map((a) => <AnimeCard key={a.mal_id} anime={a} isUpcoming />)}
           </div>
         )}
-        <div className="mt-8 text-center">
-          <Link to="/upcoming" className="btn-accent px-6 py-2.5 rounded-xl text-sm inline-flex items-center gap-1.5">
-            View More Upcoming <ArrowRight className="w-4 h-4" />
-          </Link>
-        </div>
       </section>
-    </main>
+    </div>
   )
 }

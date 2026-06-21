@@ -2,16 +2,21 @@ import { Anime, FilterState, JikanResponse } from '../types'
 
 const BASE = 'https://api.jikan.moe/v4'
 let lastReq = 0
-const DELAY = 450
+const DELAY = 450 
 
 async function req<T>(path: string, params: Record<string, string | number | undefined> = {}): Promise<T> {
   const wait = Math.max(0, DELAY - (Date.now() - lastReq))
   if (wait > 0) await new Promise((r) => setTimeout(r, wait))
   lastReq = Date.now()
+
   const url = new URL(`${BASE}${path}`)
   Object.entries(params).forEach(([k, v]) => {
-    if (v !== undefined && v !== null && v !== '') url.searchParams.set(k, String(v))
+    // Prevent sending empty strings or undefined which causes Jikan 400 errors
+    if (v !== undefined && v !== null && v !== '') {
+      url.searchParams.set(k, String(v))
+    }
   })
+
   const res = await fetch(url.toString())
   if (res.status === 429) {
     await new Promise((r) => setTimeout(r, 1600))
@@ -35,16 +40,12 @@ export async function fetchTopAnime(page = 1, limit = 25): Promise<JikanResponse
   return { ...res, data: dedupe(res.data || []) }
 }
 
-// Fetch top anime for specific genres — used by the home page genre filter
-// Uses /anime endpoint with genre filter + score ordering to get the TRUE top-rated
-// for that genre (not just client-side filter from global top 10)
 export async function fetchTopByGenres(genreIds: number[], limit = 10): Promise<Anime[]> {
   const res: JikanResponse<Anime[]> = await req('/anime', {
     genres: genreIds.join(','),
     order_by: 'score',
     sort: 'desc',
     limit,
-    min_score: 6,
     ...SFW,
   })
   return dedupe(res.data || [])
@@ -55,20 +56,31 @@ export async function fetchAnime(
 ): Promise<JikanResponse<Anime[]>> {
   const params: Record<string, string | number | undefined> = {
     page: filters.page ?? 1,
-    limit: filters.limit ?? 24,
+    limit: filters.limit ?? 25,
     ...SFW,
   }
+  
   if (filters.query?.trim()) params.q = filters.query.trim()
-  if (filters.types?.length === 1) params.type = filters.types[0].toLowerCase()
-  if (filters.ratings?.length === 1) params.rating = filters.ratings[0]
-  if (filters.statuses?.length === 1) params.status = filters.statuses[0]
+  
+  // FIXED: Jikan only accepts a single string for type, rating, and status! 
+  if (filters.types?.length) params.type = filters.types[0].toLowerCase()
+  if (filters.ratings?.length) params.rating = filters.ratings[0]
+  if (filters.statuses?.length) params.status = filters.statuses[0]
+  
   if (filters.genres?.length) params.genres = filters.genres.join(',')
+  if (filters.genresExclude?.length) params.genres_exclude = filters.genresExclude.join(',')
+  
   if (filters.years?.length) {
     const sorted = [...filters.years].sort()
     params.start_date = `${sorted[0]}-01-01`
     params.end_date = `${sorted[sorted.length - 1]}-12-31`
   }
-  if (!filters.query && filters.order_by) { params.order_by = filters.order_by; params.sort = filters.sort }
+  
+  if (!filters.query && filters.order_by) {
+    params.order_by = filters.order_by
+    params.sort = filters.sort
+  }
+  
   const res: JikanResponse<Anime[]> = await req('/anime', params)
   return { ...res, data: dedupe(res.data || []) }
 }
@@ -79,7 +91,8 @@ export async function fetchBrowseAnime(page = 1, limit = 12): Promise<JikanRespo
 }
 
 export async function fetchUpcomingAnime(page = 1, limit = 12): Promise<JikanResponse<Anime[]>> {
-  const res: JikanResponse<Anime[]> = await req('/seasons/upcoming', { page, limit, ...SFW })
+  // FIXED: Removed the ...SFW object. The `/seasons/upcoming` endpoint throws a 400 error if sfw is included!
+  const res: JikanResponse<Anime[]> = await req('/seasons/upcoming', { page, limit })
   return { ...res, data: dedupe(res.data || []) }
 }
 
@@ -98,7 +111,8 @@ export async function fetchSimilarAnime(genres: number[], excludeId: number, lim
 }
 
 export async function searchAnime(q: string, limit = 8): Promise<JikanResponse<Anime[]>> {
-  const res: JikanResponse<Anime[]> = await req('/anime', { q: q.trim(), limit, order_by: 'members', sort: 'desc', ...SFW })
+  // FIXED: Removed order_by and sort so Jikan defaults to exact Relevance matching!
+  const res: JikanResponse<Anime[]> = await req('/anime', { q: q.trim(), limit, ...SFW })
   return { ...res, data: dedupe(res.data || []) }
 }
 
