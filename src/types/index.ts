@@ -19,7 +19,7 @@ export interface Anime {
 }
 
 export function getAllGenreIds(anime: Anime): number[] {
-  return [...(anime.genres || []), ...(anime.themes || []), ...(anime.demographics || [])].map((g) => g.mal_id)
+  return [...(anime.genres || []), ...(anime.themes || []), ...(anime.demographics || [])].map(g => g.mal_id)
 }
 
 export type TierLevel = 'S' | 'A' | 'B' | 'C' | 'D' | 'F'
@@ -29,6 +29,7 @@ export const TIER_COLORS: Record<AllTiers, string> = {
   S: '#ff5757', A: '#ffbe4f', B: '#4fbdff', C: '#4fdb8e', D: '#c084fc', F: '#6b7280', unranked: '#3a3a52',
 }
 
+// Thriller removed per user request
 export const GENRES: { id: number; name: string }[] = [
   { id: 1,  name: 'Action' },
   { id: 2,  name: 'Adventure' },
@@ -54,7 +55,6 @@ export const GENRES: { id: number; name: string }[] = [
   { id: 30, name: 'Sports' },
   { id: 37, name: 'Supernatural' },
   { id: 41, name: 'Suspense' },
-  { id: 41, name: 'Thriller' },
 ]
 
 export const ANIME_TYPES = ['TV', 'Movie', 'OVA', 'ONA', 'Special', 'Music']
@@ -71,20 +71,33 @@ export const ANIME_STATUSES = [
   { value: 'upcoming', label: 'Not Yet Aired' },
 ]
 
+export type SortOption = 'relevance' | 'popularity' | 'rating' | 'newest' | 'oldest'
+export const SORT_OPTIONS: { value: SortOption; label: string }[] = [
+  { value: 'relevance',  label: 'Relevance' },
+  { value: 'popularity', label: 'Popularity' },
+  { value: 'rating',     label: 'Rating' },
+  { value: 'newest',     label: 'Newest' },
+  { value: 'oldest',     label: 'Oldest' },
+]
+
 export interface FilterState {
-  genres: number[]
-  excludeGenres: number[]   // genres to EXCLUDE from results
-  types: string[]
-  ratings: string[]
-  statuses: string[]
-  years: number[]
+  genres: number[];         excludeGenres: number[]
+  types: string[];          excludeTypes: string[]
+  ratings: string[];        excludeRatings: string[]
+  statuses: string[];       excludeStatuses: string[]
+  years: number[];          excludeYears: number[]
   userList: 'all' | 'watchlist' | 'finished'
+  sortBy: SortOption
   query: string
 }
 
 export const DEFAULT_FILTERS: FilterState = {
-  genres: [], excludeGenres: [], types: [], ratings: [],
-  statuses: [], years: [], userList: 'all', query: '',
+  genres: [], excludeGenres: [],
+  types: [], excludeTypes: [],
+  ratings: [], excludeRatings: [],
+  statuses: [], excludeStatuses: [],
+  years: [], excludeYears: [],
+  userList: 'all', sortBy: 'popularity', query: '',
 }
 
 export interface JikanResponse<T> {

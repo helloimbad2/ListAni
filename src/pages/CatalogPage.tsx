@@ -1,31 +1,55 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Search, X, SlidersHorizontal } from 'lucide-react'
-import { Anime, FilterState, DEFAULT_FILTERS } from '../types'
+import { Search, X, SlidersHorizontal, ChevronDown } from 'lucide-react'
+import { Anime, FilterState, DEFAULT_FILTERS, SORT_OPTIONS, SortOption } from '../types'
 import { fetchAnime, fetchTopAnime } from '../api/jikan'
 import { useStore } from '../store/useStore'
 import AnimeCard from '../components/AnimeCard'
 import FilterPanel from '../components/FilterPanel'
 import { GridSkeleton } from '../components/Skeleton'
 
+// Translate sortBy → Jikan order_by / sort params
+function sortParams(s: SortOption): { order_by?: string; sort?: string } {
+  if (s === 'popularity') return { order_by: 'members',    sort: 'desc' }
+  if (s === 'rating')     return { order_by: 'score',      sort: 'desc' }
+  if (s === 'newest')     return { order_by: 'start_date', sort: 'desc' }
+  if (s === 'oldest')     return { order_by: 'start_date', sort: 'asc'  }
+  return {} // relevance — let Jikan decide (best for text search)
+}
+
+// Client-side exclusion filter for non-genre fields (Jikan has no exclude params for these)
+function applyExclusions(anime: Anime[], f: FilterState): Anime[] {
+  return anime.filter(a => {
+    if (f.excludeTypes?.length   && f.excludeTypes.includes(a.type || ''))                           return false
+    if (f.excludeRatings?.length && f.excludeRatings.some(r => (a.rating || '').toLowerCase().startsWith(r))) return false
+    if (f.excludeStatuses?.length) {
+      const st = a.airing ? 'airing' : a.status === 'Not yet aired' ? 'upcoming' : 'complete'
+      if (f.excludeStatuses.includes(st)) return false
+    }
+    if (f.excludeYears?.length   && a.year && f.excludeYears.includes(a.year))                       return false
+    return true
+  })
+}
+
 export default function CatalogPage() {
   const [searchParams, setSearchParams] = useSearchParams()
-  const [anime, setAnime] = useState<Anime[]>([])
-  const [loading, setLoading] = useState(false)
-  const [page, setPage] = useState(1)
-  const [hasMore, setHasMore] = useState(true)
+  const [anime, setAnime]       = useState<Anime[]>([])
+  const [loading, setLoading]   = useState(false)
+  const [page, setPage]         = useState(1)
+  const [hasMore, setHasMore]   = useState(true)
   const [showFilters, setShowFilters] = useState(true)
-  const [filters, setFilters] = useState<FilterState>({
+  const [sortOpen, setSortOpen] = useState(false)
+  const [filters, setFilters]   = useState<FilterState>({
     ...DEFAULT_FILTERS,
     query: searchParams.get('q') || '',
   })
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>()
-  const cacheAnimes = useStore(s => s.cacheAnimes)
-  const watchlist = useStore(s => s.watchlist)
-  const finished = useStore(s => s.finished)
-  const animeCache = useStore(s => s.animeCache)
+  const debounceRef  = useRef<ReturnType<typeof setTimeout>>()
+  const cacheAnimes  = useStore(s => s.cacheAnimes)
+  const watchlist    = useStore(s => s.watchlist)
+  const finished     = useStore(s => s.finished)
+  const animeCache   = useStore(s => s.animeCache)
 
-  const isFiltered = (f: FilterState) =>
+  const hasAPIFilter = (f: FilterState) =>
     !!(f.query || f.genres.length || (f.excludeGenres?.length || 0) ||
        f.types.length || f.ratings.length || f.statuses.length || f.years.length)
 
@@ -33,33 +57,34 @@ export default function CatalogPage() {
     setLoading(true)
     try {
       let res
-      if (!isFiltered(f)) {
+      if (!hasAPIFilter(f)) {
+        // No filter at all — show top anime ordered by chosen sort
+        const sp = sortParams(f.sortBy)
         res = await fetchTopAnime(p, 25)
+        // Re-sort client-side for options that top anime doesn't support
+        if (f.sortBy === 'newest') res = { ...res, data: [...res.data].sort((a, b) => (b.year || 0) - (a.year || 0)) }
+        if (f.sortBy === 'oldest') res = { ...res, data: [...res.data].sort((a, b) => (a.year || 0) - (b.year || 0)) }
       } else {
-        res = await fetchAnime({ ...f, page: p, limit: 25 })
+        const sp = sortParams(f.sortBy)
+        res = await fetchAnime({ ...f, page: p, limit: 25, ...sp })
       }
-      const data = res.data || []
-      cacheAnimes(data)
+      const raw  = res.data || []
+      const data = applyExclusions(raw, f)
+      cacheAnimes(raw)
       setAnime(prev => p === 1 ? data : [...prev, ...data])
       setHasMore(res.pagination?.has_next_page ?? false)
     } catch (e) { console.error(e) }
     finally { setLoading(false) }
   }, [cacheAnimes])
 
-  // Sync URL search param into filters
   useEffect(() => {
     const q = searchParams.get('q') || ''
     setFilters(prev => ({ ...prev, query: q }))
   }, [searchParams])
 
-  // Reload when filters change
   useEffect(() => {
     clearTimeout(debounceRef.current)
-    debounceRef.current = setTimeout(() => {
-      setPage(1)
-      setAnime([])
-      load(filters, 1)
-    }, filters.query ? 500 : 0)
+    debounceRef.current = setTimeout(() => { setPage(1); setAnime([]); load(filters, 1) }, filters.query ? 500 : 0)
     return () => clearTimeout(debounceRef.current)
   }, [filters, load])
 
@@ -68,25 +93,26 @@ export default function CatalogPage() {
     if (f.query !== filters.query) setSearchParams(f.query ? { q: f.query } : {})
   }
 
-  const loadMore = () => {
-    const next = page + 1
-    setPage(next)
-    load(filters, next)
-  }
+  const handleSort = (s: SortOption) => { setSortOpen(false); handleFilterChange({ ...filters, sortBy: s }) }
 
-  // Client-side userList filter
+  const loadMore = () => { const next = page + 1; setPage(next); load(filters, next) }
+
+  // userList client-side filter
   const displayAnime = anime.filter(a => {
     if (filters.userList === 'watchlist') return watchlist.includes(a.mal_id)
-    if (filters.userList === 'finished') return finished.includes(a.mal_id)
+    if (filters.userList === 'finished')  return finished.includes(a.mal_id)
     return true
   })
-
-  // If userList is active and no results from API, show from cache
   const listAnime = filters.userList !== 'all' && displayAnime.length === 0 && !loading
-    ? Object.values(animeCache).filter(a =>
-        filters.userList === 'watchlist' ? watchlist.includes(a.mal_id) : finished.includes(a.mal_id)
+    ? applyExclusions(
+        Object.values(animeCache).filter(a =>
+          filters.userList === 'watchlist' ? watchlist.includes(a.mal_id) : finished.includes(a.mal_id)
+        ),
+        filters
       )
     : displayAnime
+
+  const currentSortLabel = SORT_OPTIONS.find(o => o.value === filters.sortBy)?.label ?? 'Sort'
 
   return (
     <div className="min-h-screen bg-bg">
@@ -96,39 +122,62 @@ export default function CatalogPage() {
           <span className="text-text-muted text-sm">Browse & filter all anime</span>
         </div>
 
-        {/* Search */}
-        <div className="relative mb-4 max-w-lg">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted pointer-events-none" />
-          <input
-            value={filters.query}
-            onChange={e => handleFilterChange({ ...filters, query: e.target.value })}
-            placeholder="Search by title, genre, studio..."
-            className="w-full bg-surface border border-white/[0.07] rounded-xl pl-9 pr-9 py-2.5 text-sm text-text-base placeholder:text-text-muted focus:border-accent/50 transition-all"
-            style={{ outline: 'none' }}
-          />
-          {filters.query && (
-            <button onClick={() => handleFilterChange({ ...filters, query: '' })}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-base">
-              <X className="w-4 h-4" />
+        {/* Search + Sort row */}
+        <div className="flex items-center gap-2 mb-4">
+          <div className="relative flex-1 max-w-lg">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted pointer-events-none" />
+            <input
+              value={filters.query}
+              onChange={e => handleFilterChange({ ...filters, query: e.target.value })}
+              placeholder="Search by title, genre, studio..."
+              className="w-full bg-surface border border-white/[0.07] rounded-xl pl-9 pr-9 py-2.5 text-sm text-text-base placeholder:text-text-muted focus:border-accent/50 transition-all"
+              style={{ outline: 'none' }}
+            />
+            {filters.query && (
+              <button onClick={() => handleFilterChange({ ...filters, query: '' })}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-base">
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+
+          {/* Sort dropdown */}
+          <div className="relative shrink-0">
+            <button
+              onClick={() => setSortOpen(o => !o)}
+              className="flex items-center gap-1.5 px-3 py-2.5 bg-surface border border-white/[0.07] rounded-xl text-sm text-text-muted hover:border-white/[0.15] hover:text-text-base transition-all font-display font-600"
+              style={{ outline: 'none' }}
+            >
+              {currentSortLabel} <ChevronDown className="w-3.5 h-3.5" />
             </button>
-          )}
+            {sortOpen && (
+              <div className="absolute top-full right-0 mt-1 bg-card border border-white/[0.1] rounded-xl shadow-xl z-20 py-1 min-w-[140px] animate-fade-in">
+                {SORT_OPTIONS.map(o => (
+                  <button key={o.value} onClick={() => handleSort(o.value)}
+                    className={`w-full text-left px-3 py-2 text-xs font-display font-600 transition-colors ${
+                      filters.sortBy === o.value ? 'text-accent bg-accent/10' : 'text-text-muted hover:text-text-base hover:bg-white/[0.04]'
+                    }`}>
+                    {o.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         <button className="md:hidden flex items-center gap-2 btn-ghost px-3 py-2 rounded-xl text-sm mb-4"
-          onClick={() => setShowFilters(s => !s)}>
+          onClick={() => setShowFilters(s => !s)} style={{ outline: 'none' }}>
           <SlidersHorizontal className="w-4 h-4" />
           {showFilters ? 'Hide Filters' : 'Show Filters'}
         </button>
 
         <div className="flex gap-6">
-          {/* Filter sidebar */}
           {showFilters && (
             <div className="shrink-0">
               <FilterPanel filters={filters} onChange={handleFilterChange} />
             </div>
           )}
 
-          {/* Results */}
           <div className="flex-1 min-w-0">
             {!loading && (
               <p className="text-text-muted text-xs mb-4">
@@ -152,7 +201,7 @@ export default function CatalogPage() {
                 </div>
                 {filters.userList === 'all' && hasMore && !loading && (
                   <div className="mt-8 flex justify-center">
-                    <button onClick={loadMore} className="btn-accent px-6 py-2.5 rounded-xl text-sm">Load More</button>
+                    <button onClick={loadMore} className="btn-accent px-6 py-2.5 rounded-xl text-sm" style={{ outline: 'none' }}>Load More</button>
                   </div>
                 )}
                 {loading && anime.length > 0 && <div className="mt-8"><GridSkeleton count={6} /></div>}

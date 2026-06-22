@@ -3,56 +3,50 @@ import { ChevronDown, ChevronUp, X } from 'lucide-react'
 import { FilterState, GENRES, ANIME_TYPES, ANIME_RATINGS, ANIME_STATUSES } from '../types'
 import clsx from 'clsx'
 
-interface Props {
-  filters: FilterState
-  onChange: (f: FilterState) => void
-}
+interface Props { filters: FilterState; onChange: (f: FilterState) => void }
 
 const currentYear = new Date().getFullYear()
 const YEARS = Array.from({ length: currentYear - 1959 }, (_, i) => currentYear - i)
+
+type S3 = 'none' | 'include' | 'exclude'
+
+function getS<T>(val: T, inc: T[], exc: T[]): S3 {
+  return inc.includes(val) ? 'include' : exc.includes(val) ? 'exclude' : 'none'
+}
+
+function cycleArr<T>(val: T, inc: T[], exc: T[]): { inc: T[]; exc: T[] } {
+  const s = getS(val, inc, exc)
+  if (s === 'none')    return { inc: [...inc, val], exc }
+  if (s === 'include') return { inc: inc.filter(x => x !== val), exc: [...exc, val] }
+  return { inc, exc: exc.filter(x => x !== val) }
+}
 
 export default function FilterPanel({ filters, onChange }: Props) {
   const [open, setOpen] = useState<Record<string, boolean>>({
     userList: true, genres: true, types: false, ratings: false, statuses: false, years: false,
   })
-
   const sec = (k: string) => setOpen(s => ({ ...s, [k]: !s[k] }))
 
-  // Genre: 3-state cycle — none → include → exclude → none
-  const cycleGenre = (id: number) => {
-    const included = filters.genres.includes(id)
-    const excluded = (filters.excludeGenres || []).includes(id)
-    if (!included && !excluded) {
-      // none → include
-      onChange({ ...filters, genres: [...filters.genres, id] })
-    } else if (included) {
-      // include → exclude
-      onChange({
-        ...filters,
-        genres: filters.genres.filter(x => x !== id),
-        excludeGenres: [...(filters.excludeGenres || []), id],
-      })
-    } else {
-      // exclude → none
-      onChange({ ...filters, excludeGenres: (filters.excludeGenres || []).filter(x => x !== id) })
-    }
-  }
+  const cycleGenre  = (id: number) => { const r = cycleArr(id, filters.genres, filters.excludeGenres || []); onChange({ ...filters, genres: r.inc, excludeGenres: r.exc }) }
+  const cycleType   = (t: string)  => { const r = cycleArr(t,  filters.types,  filters.excludeTypes  || []); onChange({ ...filters, types:  r.inc, excludeTypes:  r.exc }) }
+  const cycleRating = (v: string)  => { const r = cycleArr(v,  filters.ratings, filters.excludeRatings || []); onChange({ ...filters, ratings: r.inc, excludeRatings: r.exc }) }
+  const cycleStatus = (v: string)  => { const r = cycleArr(v,  filters.statuses, filters.excludeStatuses || []); onChange({ ...filters, statuses: r.inc, excludeStatuses: r.exc }) }
+  const cycleYear   = (y: number)  => { const r = cycleArr(y,  filters.years, filters.excludeYears || []); onChange({ ...filters, years: r.inc, excludeYears: r.exc }) }
 
-  const toggleType = (t: string) =>
-    onChange({ ...filters, types: filters.types.includes(t) ? filters.types.filter(x => x !== t) : [...filters.types, t] })
-  const toggleRating = (r: string) =>
-    onChange({ ...filters, ratings: filters.ratings.includes(r) ? filters.ratings.filter(x => x !== r) : [...filters.ratings, r] })
-  const toggleStatus = (s: string) =>
-    onChange({ ...filters, statuses: filters.statuses.includes(s) ? filters.statuses.filter(x => x !== s) : [...filters.statuses, s] })
-  const toggleYear = (y: number) =>
-    onChange({ ...filters, years: filters.years.includes(y) ? filters.years.filter(x => x !== y) : [...filters.years, y] })
+  const activeCount = [
+    filters.genres, filters.excludeGenres || [],
+    filters.types,  filters.excludeTypes  || [],
+    filters.ratings, filters.excludeRatings || [],
+    filters.statuses, filters.excludeStatuses || [],
+    filters.years, filters.excludeYears || [],
+  ].reduce((s, a) => s + a.length, 0) + (filters.userList !== 'all' ? 1 : 0)
 
-  const activeCount =
-    filters.genres.length + (filters.excludeGenres?.length || 0) + filters.types.length +
-    filters.ratings.length + filters.statuses.length + filters.years.length +
-    (filters.userList !== 'all' ? 1 : 0)
-
-  const clearAll = () => onChange({ ...filters, genres: [], excludeGenres: [], types: [], ratings: [], statuses: [], years: [], userList: 'all' })
+  const clearAll = () => onChange({
+    ...filters,
+    genres: [], excludeGenres: [], types: [], excludeTypes: [],
+    ratings: [], excludeRatings: [], statuses: [], excludeStatuses: [],
+    years: [], excludeYears: [], userList: 'all',
+  })
 
   return (
     <aside className="w-52 shrink-0 flex flex-col gap-1 text-xs">
@@ -65,59 +59,61 @@ export default function FilterPanel({ filters, onChange }: Props) {
         )}
       </div>
 
-      {/* My List */}
+      {/* My List — 2-state */}
       <Section label="My List" open={open.userList} onToggle={() => sec('userList')}>
         {(['all', 'watchlist', 'finished'] as const).map(v => (
-          <TwoStateCheck key={v}
-            checked={filters.userList === v}
+          <Check2 key={v} checked={filters.userList === v}
             label={v === 'all' ? 'All Anime' : v === 'watchlist' ? 'Watchlist' : 'Finished Watching'}
             onChange={() => onChange({ ...filters, userList: v })} />
         ))}
       </Section>
 
-      {/* Genres — 3-state */}
+      {/* Genre — 3-state */}
       <Section label="Genre" open={open.genres} onToggle={() => sec('genres')}>
-        <p className="text-[9px] text-text-dim mb-1.5 leading-tight">Click once to include ✓, again to exclude ✕</p>
-        <div className="max-h-52 overflow-y-auto pr-1 flex flex-col gap-0.5">
-          {GENRES.map((g, i) => {
-            const included = filters.genres.includes(g.id)
-            const excluded = (filters.excludeGenres || []).includes(g.id)
-            const state = included ? 'include' : excluded ? 'exclude' : 'none'
-            return (
-              <ThreeStateCheck key={`${g.id}-${i}`}
-                state={state} label={g.name}
-                onChange={() => cycleGenre(g.id)} />
-            )
-          })}
+        <p className="text-[9px] text-text-dim mb-1.5">✓ include · ✕ exclude · click again to clear</p>
+        <div className="max-h-52 overflow-y-auto pr-0.5 flex flex-col gap-0.5">
+          {GENRES.map((g, i) => (
+            <Check3 key={`${g.id}-${i}`}
+              state={getS(g.id, filters.genres, filters.excludeGenres || [])}
+              label={g.name} onChange={() => cycleGenre(g.id)} />
+          ))}
         </div>
       </Section>
 
-      {/* Type */}
+      {/* Type — 3-state */}
       <Section label="Type" open={open.types} onToggle={() => sec('types')}>
+        <p className="text-[9px] text-text-dim mb-1.5">✓ include · ✕ exclude</p>
         {ANIME_TYPES.map(t => (
-          <TwoStateCheck key={t} checked={filters.types.includes(t)} label={t} onChange={() => toggleType(t)} />
+          <Check3 key={t} state={getS(t, filters.types, filters.excludeTypes || [])}
+            label={t} onChange={() => cycleType(t)} />
         ))}
       </Section>
 
-      {/* Rating */}
+      {/* Rating — 3-state */}
       <Section label="Rating" open={open.ratings} onToggle={() => sec('ratings')}>
+        <p className="text-[9px] text-text-dim mb-1.5">✓ include · ✕ exclude</p>
         {ANIME_RATINGS.map(r => (
-          <TwoStateCheck key={r.value} checked={filters.ratings.includes(r.value)} label={r.label} onChange={() => toggleRating(r.value)} />
+          <Check3 key={r.value} state={getS(r.value, filters.ratings, filters.excludeRatings || [])}
+            label={r.label} onChange={() => cycleRating(r.value)} />
         ))}
       </Section>
 
-      {/* Status */}
+      {/* Status — 3-state */}
       <Section label="Status" open={open.statuses} onToggle={() => sec('statuses')}>
+        <p className="text-[9px] text-text-dim mb-1.5">✓ include · ✕ exclude</p>
         {ANIME_STATUSES.map(s => (
-          <TwoStateCheck key={s.value} checked={filters.statuses.includes(s.value)} label={s.label} onChange={() => toggleStatus(s.value)} />
+          <Check3 key={s.value} state={getS(s.value, filters.statuses, filters.excludeStatuses || [])}
+            label={s.label} onChange={() => cycleStatus(s.value)} />
         ))}
       </Section>
 
-      {/* Year */}
+      {/* Year — 3-state */}
       <Section label="Year" open={open.years} onToggle={() => sec('years')}>
-        <div className="max-h-40 overflow-y-auto pr-1 flex flex-col gap-0.5">
+        <p className="text-[9px] text-text-dim mb-1.5">✓ include · ✕ exclude</p>
+        <div className="max-h-40 overflow-y-auto pr-0.5 flex flex-col gap-0.5">
           {YEARS.map(y => (
-            <TwoStateCheck key={y} checked={filters.years.includes(y)} label={String(y)} onChange={() => toggleYear(y)} />
+            <Check3 key={y} state={getS(y, filters.years, filters.excludeYears || [])}
+              label={String(y)} onChange={() => cycleYear(y)} />
           ))}
         </div>
       </Section>
@@ -137,51 +133,27 @@ function Section({ label, open, onToggle, children }: { label: string; open: boo
   )
 }
 
-// Standard 2-state checkbox (all filters except genres)
-function TwoStateCheck({ checked, label, onChange }: { checked: boolean; label: string; onChange: () => void }) {
+function Check2({ checked, label, onChange }: { checked: boolean; label: string; onChange: () => void }) {
   return (
-    <label className="flex items-center gap-2 py-0.5 cursor-pointer group select-none"
-      onClick={e => { e.preventDefault(); onChange() }}>
-      <div className={clsx('w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 transition-all',
-        checked ? 'bg-accent border-accent' : 'border-white/20 group-hover:border-white/40')}>
-        {checked && (
-          <svg className="w-2.5 h-2.5 text-white" viewBox="0 0 10 10">
-            <path d="M2 5l2.5 2.5L8 3" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-        )}
+    <label className="flex items-center gap-2 py-0.5 cursor-pointer group select-none" onClick={e => { e.preventDefault(); onChange() }}>
+      <div className={clsx('w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 transition-all', checked ? 'bg-accent border-accent' : 'border-white/20 group-hover:border-white/40')}>
+        {checked && <svg className="w-2.5 h-2.5 text-white" viewBox="0 0 10 10"><path d="M2 5l2.5 2.5L8 3" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>}
       </div>
-      <span className={clsx('text-[11px] transition-colors leading-tight',
-        checked ? 'text-accent font-600' : 'text-text-muted group-hover:text-text-base')}>
-        {label}
-      </span>
+      <span className={clsx('text-[11px] transition-colors leading-tight', checked ? 'text-accent font-600' : 'text-text-muted group-hover:text-text-base')}>{label}</span>
     </label>
   )
 }
 
-// 3-state: none | include (green ✓) | exclude (red ✕)
-function ThreeStateCheck({ state, label, onChange }: { state: 'none' | 'include' | 'exclude'; label: string; onChange: () => void }) {
+function Check3({ state, label, onChange }: { state: S3; label: string; onChange: () => void }) {
   return (
-    <label className="flex items-center gap-2 py-0.5 cursor-pointer group select-none"
-      onClick={e => { e.preventDefault(); onChange() }}>
+    <label className="flex items-center gap-2 py-0.5 cursor-pointer group select-none" onClick={e => { e.preventDefault(); onChange() }}>
       <div className={clsx('w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 transition-all',
-        state === 'include' ? 'bg-accent border-accent' :
-        state === 'exclude' ? 'bg-red-600 border-red-500' :
-        'border-white/20 group-hover:border-white/40')}>
-        {state === 'include' && (
-          <svg className="w-2.5 h-2.5 text-white" viewBox="0 0 10 10">
-            <path d="M2 5l2.5 2.5L8 3" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-        )}
-        {state === 'exclude' && (
-          <svg className="w-2.5 h-2.5 text-white" viewBox="0 0 10 10">
-            <path d="M2 2l6 6M8 2l-6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-          </svg>
-        )}
+        state === 'include' ? 'bg-accent border-accent' : state === 'exclude' ? 'bg-red-600 border-red-500' : 'border-white/20 group-hover:border-white/40')}>
+        {state === 'include' && <svg className="w-2.5 h-2.5 text-white" viewBox="0 0 10 10"><path d="M2 5l2.5 2.5L8 3" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+        {state === 'exclude' && <svg className="w-2.5 h-2.5 text-white" viewBox="0 0 10 10"><path d="M2 2l6 6M8 2l-6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>}
       </div>
       <span className={clsx('text-[11px] transition-colors leading-tight',
-        state === 'include' ? 'text-accent font-600' :
-        state === 'exclude' ? 'text-red-400 font-600 line-through' :
-        'text-text-muted group-hover:text-text-base')}>
+        state === 'include' ? 'text-accent font-600' : state === 'exclude' ? 'text-red-400 font-600 line-through' : 'text-text-muted group-hover:text-text-base')}>
         {label}
       </span>
     </label>
