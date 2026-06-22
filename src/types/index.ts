@@ -29,10 +29,6 @@ export const TIER_COLORS: Record<AllTiers, string> = {
   S: '#ff5757', A: '#ffbe4f', B: '#4fbdff', C: '#4fdb8e', D: '#c084fc', F: '#6b7280', unranked: '#3a3a52',
 }
 
-// Verified Jikan v4 genre IDs — cross-referenced with MAL's genre taxonomy
-// Source: https://api.jikan.moe/v4/genres/anime
-// Jikan v4 uses a unified ID space: genres (1-43), themes (50+), demographics (15,25,27,42,43)
-// The /anime?genres= filter accepts IDs from ALL categories
 export const GENRES: { id: number; name: string }[] = [
   { id: 1,  name: 'Action' },
   { id: 2,  name: 'Adventure' },
@@ -58,7 +54,7 @@ export const GENRES: { id: number; name: string }[] = [
   { id: 30, name: 'Sports' },
   { id: 37, name: 'Supernatural' },
   { id: 41, name: 'Suspense' },
-  { id: 41, name: 'Thriller' },   // MAL maps Thriller → Suspense (ID 41); same tag in Jikan v4
+  { id: 41, name: 'Thriller' },
 ]
 
 export const ANIME_TYPES = ['TV', 'Movie', 'OVA', 'ONA', 'Special', 'Music']
@@ -76,13 +72,21 @@ export const ANIME_STATUSES = [
 ]
 
 export interface FilterState {
-  genres: number[]; types: string[]; ratings: string[]
-  statuses: string[]; years: number[]
-  userList: 'all' | 'watchlist' | 'finished'; query: string
+  genres: number[]
+  excludeGenres: number[]   // genres to EXCLUDE from results
+  types: string[]
+  ratings: string[]
+  statuses: string[]
+  years: number[]
+  userList: 'all' | 'watchlist' | 'finished'
+  query: string
 }
+
 export const DEFAULT_FILTERS: FilterState = {
-  genres: [], types: [], ratings: [], statuses: [], years: [], userList: 'all', query: '',
+  genres: [], excludeGenres: [], types: [], ratings: [],
+  statuses: [], years: [], userList: 'all', query: '',
 }
+
 export interface JikanResponse<T> {
   data: T
   pagination?: { last_visible_page: number; has_next_page: boolean; current_page: number; items: { count: number; total: number; per_page: number } }

@@ -1,51 +1,65 @@
 import { Anime, FilterState, JikanResponse } from '../types'
 
 const BASE = 'https://api.jikan.moe/v4'
-let lastReq = 0
-const DELAY = 450
 
-async function req<T>(path: string, params: Record<string, string | number | undefined> = {}): Promise<T> {
-  const wait = Math.max(0, DELAY - (Date.now() - lastReq))
-  if (wait > 0) await new Promise((r) => setTimeout(r, wait))
-  lastReq = Date.now()
+// ── Proper FIFO request queue ─────────────────────────────────────────
+// Jikan free tier: 3 req/sec, 60/min. We space requests 400ms apart.
+type QItem = { fn: () => Promise<unknown>; ok: (v: unknown) => void; err: (e: unknown) => void }
+const Q: QItem[] = []
+let qRunning = false
+
+async function drain() {
+  if (qRunning) return
+  qRunning = true
+  while (Q.length > 0) {
+    const item = Q.shift()!
+    try { item.ok(await item.fn()) } catch (e) { item.err(e) }
+    if (Q.length > 0) await new Promise(r => setTimeout(r, 420))
+  }
+  qRunning = false
+}
+
+function enqueue<T>(fn: () => Promise<T>): Promise<T> {
+  return new Promise((ok, err) => { Q.push({ fn: fn as () => Promise<unknown>, ok: ok as (v: unknown) => void, err }); drain() })
+}
+
+async function apiFetch(path: string, params: Record<string, string | number | undefined> = {}) {
   const url = new URL(`${BASE}${path}`)
   Object.entries(params).forEach(([k, v]) => {
     if (v !== undefined && v !== null && v !== '') url.searchParams.set(k, String(v))
   })
   const res = await fetch(url.toString())
   if (res.status === 429) {
-    await new Promise((r) => setTimeout(r, 1600))
-    const res2 = await fetch(url.toString())
-    if (!res2.ok) throw new Error(`API ${res2.status}`)
-    return res2.json()
+    await new Promise(r => setTimeout(r, 2000))
+    const r2 = await fetch(url.toString())
+    if (!r2.ok) throw new Error(`API ${r2.status}`)
+    return r2.json()
   }
   if (!res.ok) throw new Error(`API ${res.status}`)
   return res.json()
 }
 
+function req<T>(path: string, params: Record<string, string | number | undefined> = {}): Promise<T> {
+  return enqueue(() => apiFetch(path, params))
+}
+
 function dedupe(arr: Anime[]): Anime[] {
   const seen = new Set<number>()
-  return arr.filter((a) => { if (seen.has(a.mal_id)) return false; seen.add(a.mal_id); return true })
+  return arr.filter(a => { if (seen.has(a.mal_id)) return false; seen.add(a.mal_id); return true })
 }
 
 const SFW = { sfw: 'true' }
+
+// ── Public API ────────────────────────────────────────────────────────
 
 export async function fetchTopAnime(page = 1, limit = 25): Promise<JikanResponse<Anime[]>> {
   const res: JikanResponse<Anime[]> = await req('/top/anime', { page, limit, ...SFW })
   return { ...res, data: dedupe(res.data || []) }
 }
 
-// Fetch top anime for specific genres — used by the home page genre filter
-// Uses /anime endpoint with genre filter + score ordering to get the TRUE top-rated
-// for that genre (not just client-side filter from global top 10)
 export async function fetchTopByGenres(genreIds: number[], limit = 10): Promise<Anime[]> {
   const res: JikanResponse<Anime[]> = await req('/anime', {
-    genres: genreIds.join(','),
-    order_by: 'score',
-    sort: 'desc',
-    limit,
-    min_score: 6,
-    ...SFW,
+    genres: genreIds.join(','), order_by: 'score', sort: 'desc', limit, min_score: 5, ...SFW,
   })
   return dedupe(res.data || [])
 }
@@ -54,15 +68,14 @@ export async function fetchAnime(
   filters: Partial<FilterState> & { page?: number; limit?: number; order_by?: string; sort?: string }
 ): Promise<JikanResponse<Anime[]>> {
   const params: Record<string, string | number | undefined> = {
-    page: filters.page ?? 1,
-    limit: filters.limit ?? 24,
-    ...SFW,
+    page: filters.page ?? 1, limit: filters.limit ?? 25, ...SFW,
   }
   if (filters.query?.trim()) params.q = filters.query.trim()
   if (filters.types?.length === 1) params.type = filters.types[0].toLowerCase()
   if (filters.ratings?.length === 1) params.rating = filters.ratings[0]
   if (filters.statuses?.length === 1) params.status = filters.statuses[0]
   if (filters.genres?.length) params.genres = filters.genres.join(',')
+  if (filters.excludeGenres?.length) params.genres_exclude = filters.excludeGenres.join(',')
   if (filters.years?.length) {
     const sorted = [...filters.years].sort()
     params.start_date = `${sorted[0]}-01-01`
@@ -73,12 +86,14 @@ export async function fetchAnime(
   return { ...res, data: dedupe(res.data || []) }
 }
 
-export async function fetchBrowseAnime(page = 1, limit = 12): Promise<JikanResponse<Anime[]>> {
-  const res: JikanResponse<Anime[]> = await req('/anime', { status: 'airing', order_by: 'members', sort: 'desc', limit, page, ...SFW })
+export async function fetchBrowseAnime(page = 1, limit = 14): Promise<JikanResponse<Anime[]>> {
+  const res: JikanResponse<Anime[]> = await req('/anime', {
+    status: 'airing', order_by: 'members', sort: 'desc', limit, page, ...SFW,
+  })
   return { ...res, data: dedupe(res.data || []) }
 }
 
-export async function fetchUpcomingAnime(page = 1, limit = 12): Promise<JikanResponse<Anime[]>> {
+export async function fetchUpcomingAnime(page = 1, limit = 14): Promise<JikanResponse<Anime[]>> {
   const res: JikanResponse<Anime[]> = await req('/seasons/upcoming', { page, limit, ...SFW })
   return { ...res, data: dedupe(res.data || []) }
 }
@@ -87,18 +102,24 @@ export async function fetchAnimeById(id: number): Promise<{ data: Anime }> {
   return req(`/anime/${id}`)
 }
 
+export async function fetchRandomAnime(): Promise<{ data: Anime }> {
+  return req('/random/anime')
+}
+
 export async function fetchSimilarAnime(genres: number[], excludeId: number, limit = 6): Promise<Anime[]> {
   if (!genres.length) return []
   try {
     const res: JikanResponse<Anime[]> = await req('/anime', {
       genres: genres.slice(0, 2).join(','), order_by: 'score', sort: 'desc', limit: limit + 1, ...SFW,
     })
-    return (res.data || []).filter((a) => a.mal_id !== excludeId).slice(0, limit)
+    return dedupe(res.data || []).filter(a => a.mal_id !== excludeId).slice(0, limit)
   } catch { return [] }
 }
 
 export async function searchAnime(q: string, limit = 8): Promise<JikanResponse<Anime[]>> {
-  const res: JikanResponse<Anime[]> = await req('/anime', { q: q.trim(), limit, order_by: 'members', sort: 'desc', ...SFW })
+  const res: JikanResponse<Anime[]> = await req('/anime', {
+    q: q.trim(), limit, order_by: 'members', sort: 'desc', ...SFW,
+  })
   return { ...res, data: dedupe(res.data || []) }
 }
 

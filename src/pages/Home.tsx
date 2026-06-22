@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowRight, Star, TrendingUp, Calendar } from 'lucide-react'
+import { ArrowRight, Star, TrendingUp, Calendar, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Anime } from '../types'
 import { fetchTopAnime, fetchBrowseAnime, fetchUpcomingAnime, fetchTopByGenres, getImageUrl } from '../api/jikan'
 import { useStore } from '../store/useStore'
@@ -14,109 +14,145 @@ export default function Home() {
   const [browseAnime, setBrowseAnime] = useState<Anime[]>([])
   const [upcoming, setUpcoming] = useState<Anime[]>([])
   const [selectedGenres, setSelectedGenres] = useState<number[]>([])
-  const [spotlight, setSpotlight] = useState<Anime | null>(null)
+  const [heroIdx, setHeroIdx] = useState(0)
   const [loadingTop, setLoadingTop] = useState(true)
   const [loadingGenre, setLoadingGenre] = useState(false)
   const [loadingBrowse, setLoadingBrowse] = useState(true)
   const [loadingUpcoming, setLoadingUpcoming] = useState(true)
   const genreReqRef = useRef(0)
-  const cacheAnimes = useStore((s) => s.cacheAnimes)
+  const heroTimer = useRef<ReturnType<typeof setInterval>>()
+  const cacheAnimes = useStore(s => s.cacheAnimes)
 
-  // Load global top 10 + browse + upcoming on mount
   useEffect(() => {
-    fetchTopAnime(1, 10).then((res) => {
-      const data = res.data || []
-      setTop10(data); cacheAnimes(data)
-      if (data.length) setSpotlight(data[0])
-    }).catch(() => {}).finally(() => setLoadingTop(false))
+    fetchTopAnime(1, 10)
+      .then(r => { const d = r.data || []; setTop10(d); cacheAnimes(d) })
+      .catch(() => {}).finally(() => setLoadingTop(false))
 
-    fetchBrowseAnime(1, 12).then((res) => {
-      setBrowseAnime(res.data || []); cacheAnimes(res.data || [])
-    }).catch(() => {}).finally(() => setLoadingBrowse(false))
+    // Fetch 14, show 12 to guarantee a full 2-row grid after dedup
+    fetchBrowseAnime(1, 14)
+      .then(r => { const d = (r.data || []).slice(0, 12); setBrowseAnime(d); cacheAnimes(d) })
+      .catch(() => {}).finally(() => setLoadingBrowse(false))
 
-    fetchUpcomingAnime(1, 12).then((res) => {
-      setUpcoming(res.data || []); cacheAnimes(res.data || [])
-    }).catch(() => {}).finally(() => setLoadingUpcoming(false))
+    fetchUpcomingAnime(1, 14)
+      .then(r => { const d = (r.data || []).slice(0, 12); setUpcoming(d); cacheAnimes(d) })
+      .catch(() => {}).finally(() => setLoadingUpcoming(false))
   }, [])
 
-  // When a genre is selected → fetch top anime FOR that genre from the API
-  // This is the correct approach — client-side filtering from global top 10
-  // misses anime that are #1 in a genre but not in the global top 10
-  useEffect(() => {
-    if (selectedGenres.length === 0) { setGenreAnime([]); return }
+  // Hero rotates through browse anime every 5s
+  const heroAnime = browseAnime.length > 0 ? browseAnime.slice(0, 8) : []
+  const currentHero = heroAnime[heroIdx] || null
 
-    const reqId = ++genreReqRef.current
+  useEffect(() => {
+    if (heroAnime.length < 2) return
+    heroTimer.current = setInterval(() => setHeroIdx(i => (i + 1) % heroAnime.length), 5000)
+    return () => clearInterval(heroTimer.current)
+  }, [heroAnime.length])
+
+  const heroNav = (dir: 1 | -1) => {
+    clearInterval(heroTimer.current)
+    setHeroIdx(i => (i + dir + heroAnime.length) % heroAnime.length)
+  }
+
+  // Genre filter: fetch from API
+  useEffect(() => {
+    if (!selectedGenres.length) { setGenreAnime([]); return }
+    const rid = ++genreReqRef.current
     setLoadingGenre(true)
-    fetchTopByGenres(selectedGenres, 10).then((data) => {
-      if (reqId !== genreReqRef.current) return // stale
-      setGenreAnime(data); cacheAnimes(data)
-    }).catch(() => {}).finally(() => {
-      if (reqId === genreReqRef.current) setLoadingGenre(false)
-    })
+    fetchTopByGenres(selectedGenres, 10)
+      .then(d => { if (rid !== genreReqRef.current) return; setGenreAnime(d); cacheAnimes(d) })
+      .catch(() => {}).finally(() => { if (rid === genreReqRef.current) setLoadingGenre(false) })
   }, [selectedGenres])
 
-  // What to show in the top section
   const displayAnime = selectedGenres.length > 0 ? genreAnime : top10
   const displayLoading = selectedGenres.length > 0 ? loadingGenre : loadingTop
 
   return (
     <main className="min-h-screen bg-bg">
-      {/* Spotlight hero */}
-      <section className="relative overflow-hidden min-h-[340px] flex items-end border-b border-white/[0.06]">
-        {spotlight && (
-          <div className="absolute inset-0 pointer-events-none">
-            <img src={getImageUrl(spotlight, 'large')} alt=""
+
+      {/* ── Rotating Hero ─────────────────────────────────── */}
+      <section className="relative overflow-hidden border-b border-white/[0.06]" style={{ minHeight: 320 }}>
+        {/* Background crossfade */}
+        {currentHero && (
+          <div key={currentHero.mal_id} className="absolute inset-0 pointer-events-none hero-fade">
+            <img src={getImageUrl(currentHero, 'large')} alt=""
               className="w-full h-full object-cover opacity-15 blur-2xl scale-110" />
-            <div className="absolute inset-0 bg-gradient-to-t from-bg via-bg/75 to-bg/30" />
-            <div className="absolute inset-0 bg-gradient-to-r from-bg/70 to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-t from-bg via-bg/80 to-bg/40" />
+            <div className="absolute inset-0 bg-gradient-to-r from-bg/80 to-transparent" />
           </div>
         )}
-        <div className="relative max-w-7xl mx-auto px-4 py-12 w-full flex items-end gap-8">
-          {spotlight && (
-            <Link to={`/anime/${spotlight.mal_id}`} className="hidden md:block shrink-0 group">
+        <div className="absolute inset-0 bg-bg/30 pointer-events-none" />
+
+        <div className="relative max-w-7xl mx-auto px-4 py-12 flex items-end gap-8">
+          {/* Thumbnail */}
+          {currentHero && !loadingBrowse && (
+            <Link to={`/anime/${currentHero.mal_id}`} className="hidden md:block shrink-0 group">
               <div className="w-28 rounded-xl overflow-hidden border border-white/10 shadow-2xl shadow-black/60 group-hover:scale-105 transition-transform">
-                <img src={getImageUrl(spotlight, 'large')} alt={spotlight.title_english || spotlight.title}
+                <img src={getImageUrl(currentHero, 'large')} alt={currentHero.title_english || currentHero.title}
                   className="w-full object-contain bg-[#0a0b12]" />
               </div>
             </Link>
           )}
+
           <div className="flex-1">
-            {spotlight && (
+            {currentHero && (
               <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-accent/30 bg-accent/10 text-accent text-xs font-display font-600 mb-3">
-                <Star className="w-3 h-3 fill-accent" /> #1 Rated · {spotlight.title_english || spotlight.title}
+                <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+                Airing Now · {currentHero.title_english || currentHero.title}
               </div>
             )}
             <h1 className="font-display font-700 text-4xl sm:text-5xl text-text-base leading-tight mb-3">
               Discover Anime.<br />
               <span className="text-accent">Rank Your Favorites.</span>
             </h1>
-            <p className="text-text-muted text-base leading-relaxed max-w-md">
+            <p className="text-text-muted text-base leading-relaxed max-w-md mb-5">
               Browse thousands of titles, curate your watchlist, and build the definitive tier list.
             </p>
-            <div className="flex gap-2 mt-5 flex-wrap">
+            <div className="flex gap-2 flex-wrap">
               <Link to="/catalog" className="btn-accent px-5 py-2.5 rounded-xl text-sm inline-flex items-center gap-1.5">
                 Browse Catalog <ArrowRight className="w-4 h-4" />
               </Link>
               <Link to="/tierlist" className="btn-ghost px-5 py-2.5 rounded-xl text-sm">Build Tier List</Link>
             </div>
           </div>
+
+          {/* Hero controls */}
+          {heroAnime.length > 1 && (
+            <div className="hidden md:flex flex-col items-end gap-3 shrink-0 self-end pb-1">
+              <div className="flex items-center gap-1.5">
+                <button onClick={() => heroNav(-1)}
+                  className="w-7 h-7 rounded-lg border border-white/10 bg-white/[0.05] flex items-center justify-center text-text-muted hover:text-text-base hover:bg-white/[0.1] transition-all">
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                </button>
+                <button onClick={() => heroNav(1)}
+                  className="w-7 h-7 rounded-lg border border-white/10 bg-white/[0.05] flex items-center justify-center text-text-muted hover:text-text-base hover:bg-white/[0.1] transition-all">
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              {/* Dot indicators */}
+              <div className="flex gap-1">
+                {heroAnime.map((_, i) => (
+                  <button key={i} onClick={() => { clearInterval(heroTimer.current); setHeroIdx(i) }}
+                    className={`rounded-full transition-all ${i === heroIdx ? 'w-4 h-1.5 bg-accent' : 'w-1.5 h-1.5 bg-white/20 hover:bg-white/40'}`} />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </section>
 
-      {/* Top 10 / Top by genre */}
+      {/* ── Top 10 / Top by genre ──────────────────────────── */}
       <section className="max-w-7xl mx-auto px-4 py-10">
         <div className="flex items-center gap-3 mb-1">
           <Star className="w-5 h-5 text-accent fill-accent" />
           <h2 className="font-display font-700 text-xl text-text-base">
-            {selectedGenres.length === 0 ? 'Top 10 Anime of All Time' : `Top Anime · Filtered by Genre`}
+            {selectedGenres.length === 0 ? 'Top 10 Anime of All Time' : 'Top Anime · Filtered by Genre'}
           </h2>
         </div>
-        <p className="text-text-muted text-sm mb-5">
-          {selectedGenres.length === 0
-            ? 'Ranked by MAL score · Select a genre to filter'
-            : 'Highest-rated anime matching your selected genre(s)'}
+        <p className="text-text-muted text-sm mb-4">
+          {selectedGenres.length === 0 ? 'Ranked by MAL score' : 'Highest-rated for selected genre(s)'}
         </p>
 
+        {/* Genre dropdown — redesigned like Image 1 */}
         <div className="mb-6">
           <GenreFilter selected={selectedGenres} onChange={setSelectedGenres} />
         </div>
@@ -126,9 +162,7 @@ export default function Home() {
             {Array.from({ length: 10 }).map((_, i) => <CardSkeleton key={i} />)}
           </div>
         ) : displayAnime.length === 0 ? (
-          <div className="text-center py-16 text-text-muted text-sm">
-            No results found for the selected genre(s).
-          </div>
+          <p className="text-center py-12 text-text-muted text-sm">No results for the selected genre(s).</p>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
             {displayAnime.map((anime, i) => (
@@ -141,7 +175,7 @@ export default function Home() {
         )}
       </section>
 
-      {/* Browse Anime */}
+      {/* ── Browse Anime ───────────────────────────────────── */}
       <section className="max-w-7xl mx-auto px-4 py-10 border-t border-white/[0.06]">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
@@ -157,7 +191,7 @@ export default function Home() {
         </div>
         {loadingBrowse ? <GridSkeleton count={12} /> : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-            {browseAnime.map((a) => <AnimeCard key={a.mal_id} anime={a} showStatus />)}
+            {browseAnime.map(a => <AnimeCard key={a.mal_id} anime={a} showStatus />)}
           </div>
         )}
         <div className="mt-8 text-center">
@@ -167,7 +201,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Upcoming */}
+      {/* ── Upcoming Anime ─────────────────────────────────── */}
       <section className="max-w-7xl mx-auto px-4 py-10 border-t border-white/[0.06] pb-16">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
@@ -183,7 +217,7 @@ export default function Home() {
         </div>
         {loadingUpcoming ? <GridSkeleton count={12} /> : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-            {upcoming.map((a) => <AnimeCard key={a.mal_id} anime={a} isUpcoming />)}
+            {upcoming.map(a => <AnimeCard key={a.mal_id} anime={a} isUpcoming />)}
           </div>
         )}
         <div className="mt-8 text-center">
