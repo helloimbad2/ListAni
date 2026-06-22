@@ -76,12 +76,12 @@ export const ANIME_STATUSES = [
 ]
 
 export interface FilterState {
-  genres: number[]; excludedGenres: number[]; types: string[]; ratings: string[]
+  genres: number[]; types: string[]; ratings: string[]
   statuses: string[]; years: number[]
   userList: 'all' | 'watchlist' | 'finished'; query: string
 }
 export const DEFAULT_FILTERS: FilterState = {
-  genres: [], excludedGenres: [], types: [], ratings: [], statuses: [], years: [], userList: 'all', query: '',
+  genres: [], types: [], ratings: [], statuses: [], years: [], userList: 'all', query: '',
 }
 export interface JikanResponse<T> {
   data: T

@@ -117,7 +117,7 @@ export default function Navbar() {
                 onFocus={() => setOpen(true)}
                 onKeyDown={handleKeyDown}
                 placeholder="Search anime... (⌘K)"
-                className="w-full bg-surface border border-white/[0.07] rounded-2xl pl-9 pr-8 py-2 text-sm text-text-base placeholder:text-text-muted focus:outline-none focus:border-accent/50 focus:bg-card transition-all shadow-sm shadow-black/20"
+                className="w-full bg-surface border border-white/[0.07] rounded-xl pl-9 pr-8 py-2 text-sm text-text-base placeholder:text-text-muted focus:outline-none focus:border-accent/50 focus:bg-card transition-all"
               />
               {q && (
                 <button type="button" onClick={() => { setQ(''); setResults([]); inputRef.current?.focus() }}
