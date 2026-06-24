@@ -137,3 +137,22 @@ export function formatAired(anime: Anime): string {
   if (!to || from === to) return String(from)
   return `${from} – ${to}`
 }
+
+// ── AniList banner (separate API, not subject to Jikan rate limit) ────
+export async function fetchAnilistBanner(malId: number): Promise<string | null> {
+  try {
+    const res = await fetch('https://graphql.anilist.co', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({
+        query: 'query($id:Int){Media(idMal:$id,type:ANIME){bannerImage}}',
+        variables: { id: malId },
+      }),
+    })
+    if (!res.ok) return null
+    const json = await res.json()
+    return (json?.data?.Media?.bannerImage as string) || null
+  } catch {
+    return null
+  }
+}
