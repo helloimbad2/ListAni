@@ -30,11 +30,18 @@ export default function Navbar() {
     return () => document.removeEventListener('mousedown', h)
   }, [])
 
-  // Cmd/Ctrl+K focuses input
+  // Press S to focus search (when not already typing in an input)
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); inputRef.current?.focus(); setOpen(true) }
-      if (e.key === 'Escape') { setOpen(false); inputRef.current?.blur() }
+      if (e.key === 'Escape') { setOpen(false); inputRef.current?.blur(); return }
+      if (e.key === 's' || e.key === 'S') {
+        const tag = (e.target as HTMLElement).tagName.toLowerCase()
+        if (tag !== 'input' && tag !== 'textarea' && tag !== 'select') {
+          e.preventDefault()
+          inputRef.current?.focus()
+          setOpen(true)
+        }
+      }
     }
     window.addEventListener('keydown', h)
     return () => window.removeEventListener('keydown', h)
@@ -116,8 +123,8 @@ export default function Navbar() {
                 ? <button type="button" onClick={() => { setQ(''); setResults([]); inputRef.current?.focus() }}>
                     <X className="w-3 h-3 text-text-muted hover:text-text-base transition-colors" />
                   </button>
-                : <kbd className="hidden sm:flex items-center gap-0.5 px-1.5 py-0.5 rounded border border-white/[0.08] bg-white/[0.03] text-[9px] font-display text-text-dim shrink-0">
-                    ⌘K
+                : <kbd className="hidden sm:flex items-center px-1.5 py-0.5 rounded border border-white/[0.08] bg-white/[0.03] text-[9px] font-display text-text-dim shrink-0">
+                    S
                   </kbd>
               }
             </div>

@@ -86,7 +86,8 @@ export interface FilterState {
   ratings: string[];        excludeRatings: string[]
   statuses: string[];       excludeStatuses: string[]
   years: number[];          excludeYears: number[]
-  userList: 'all' | 'watchlist' | 'finished'
+  listInclude: ('watchlist' | 'finished')[]   // show only anime in these lists
+  listExclude: ('watchlist' | 'finished')[]   // hide anime in these lists
   sortBy: SortOption
   query: string
 }
@@ -97,7 +98,8 @@ export const DEFAULT_FILTERS: FilterState = {
   ratings: [], excludeRatings: [],
   statuses: [], excludeStatuses: [],
   years: [], excludeYears: [],
-  userList: 'all', sortBy: 'popularity', query: '',
+  listInclude: [], listExclude: [],
+  sortBy: 'popularity', query: '',
 }
 
 export interface JikanResponse<T> {

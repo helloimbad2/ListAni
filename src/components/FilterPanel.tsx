@@ -27,11 +27,12 @@ export default function FilterPanel({ filters, onChange }: Props) {
   })
   const sec = (k: string) => setOpen(s => ({ ...s, [k]: !s[k] }))
 
-  const cycleGenre  = (id: number) => { const r = cycleArr(id, filters.genres, filters.excludeGenres || []); onChange({ ...filters, genres: r.inc, excludeGenres: r.exc }) }
-  const cycleType   = (t: string)  => { const r = cycleArr(t,  filters.types,  filters.excludeTypes  || []); onChange({ ...filters, types:  r.inc, excludeTypes:  r.exc }) }
-  const cycleRating = (v: string)  => { const r = cycleArr(v,  filters.ratings, filters.excludeRatings || []); onChange({ ...filters, ratings: r.inc, excludeRatings: r.exc }) }
+  const cycleList   = (v: 'watchlist' | 'finished') => { const r = cycleArr(v, filters.listInclude || [], filters.listExclude || []); onChange({ ...filters, listInclude: r.inc, listExclude: r.exc }) }
+  const cycleGenre  = (id: number) => { const r = cycleArr(id, filters.genres,   filters.excludeGenres   || []); onChange({ ...filters, genres:   r.inc, excludeGenres:   r.exc }) }
+  const cycleType   = (t: string)  => { const r = cycleArr(t,  filters.types,    filters.excludeTypes    || []); onChange({ ...filters, types:    r.inc, excludeTypes:    r.exc }) }
+  const cycleRating = (v: string)  => { const r = cycleArr(v,  filters.ratings,  filters.excludeRatings  || []); onChange({ ...filters, ratings:  r.inc, excludeRatings:  r.exc }) }
   const cycleStatus = (v: string)  => { const r = cycleArr(v,  filters.statuses, filters.excludeStatuses || []); onChange({ ...filters, statuses: r.inc, excludeStatuses: r.exc }) }
-  const cycleYear   = (y: number)  => { const r = cycleArr(y,  filters.years, filters.excludeYears || []); onChange({ ...filters, years: r.inc, excludeYears: r.exc }) }
+  const cycleYear   = (y: number)  => { const r = cycleArr(y,  filters.years,    filters.excludeYears    || []); onChange({ ...filters, years:    r.inc, excludeYears:    r.exc }) }
 
   const activeCount = [
     filters.genres, filters.excludeGenres || [],
@@ -39,13 +40,15 @@ export default function FilterPanel({ filters, onChange }: Props) {
     filters.ratings, filters.excludeRatings || [],
     filters.statuses, filters.excludeStatuses || [],
     filters.years, filters.excludeYears || [],
-  ].reduce((s, a) => s + a.length, 0) + (filters.userList !== 'all' ? 1 : 0)
+    filters.listInclude || [], filters.listExclude || [],
+  ].reduce((s, a) => s + a.length, 0)
 
   const clearAll = () => onChange({
     ...filters,
     genres: [], excludeGenres: [], types: [], excludeTypes: [],
     ratings: [], excludeRatings: [], statuses: [], excludeStatuses: [],
-    years: [], excludeYears: [], userList: 'all',
+    years: [], excludeYears: [],
+    listInclude: [], listExclude: [],
   })
 
   return (
@@ -59,18 +62,20 @@ export default function FilterPanel({ filters, onChange }: Props) {
         )}
       </div>
 
-      {/* My List — 2-state */}
+      {/* My List — now 3-state */}
       <Section label="My List" open={open.userList} onToggle={() => sec('userList')}>
-        {(['all', 'watchlist', 'finished'] as const).map(v => (
-          <Check2 key={v} checked={filters.userList === v}
-            label={v === 'all' ? 'All Anime' : v === 'watchlist' ? 'Watchlist' : 'Finished Watching'}
-            onChange={() => onChange({ ...filters, userList: v })} />
-        ))}
+        <Check3
+          state={getS<'watchlist' | 'finished'>('watchlist', filters.listInclude || [], filters.listExclude || [])}
+          label="Watchlist"
+          onChange={() => cycleList('watchlist')} />
+        <Check3
+          state={getS<'watchlist' | 'finished'>('finished', filters.listInclude || [], filters.listExclude || [])}
+          label="Finished Watching"
+          onChange={() => cycleList('finished')} />
       </Section>
 
-      {/* Genre — 3-state */}
+      {/* Genre */}
       <Section label="Genre" open={open.genres} onToggle={() => sec('genres')}>
-        <p className="text-[9px] text-text-dim mb-1.5">✓ include · ✕ exclude · click again to clear</p>
         <div className="max-h-52 overflow-y-auto pr-0.5 flex flex-col gap-0.5">
           {GENRES.map((g, i) => (
             <Check3 key={`${g.id}-${i}`}
@@ -80,36 +85,32 @@ export default function FilterPanel({ filters, onChange }: Props) {
         </div>
       </Section>
 
-      {/* Type — 3-state */}
+      {/* Type */}
       <Section label="Type" open={open.types} onToggle={() => sec('types')}>
-        <p className="text-[9px] text-text-dim mb-1.5">✓ include · ✕ exclude</p>
         {ANIME_TYPES.map(t => (
           <Check3 key={t} state={getS(t, filters.types, filters.excludeTypes || [])}
             label={t} onChange={() => cycleType(t)} />
         ))}
       </Section>
 
-      {/* Rating — 3-state */}
+      {/* Rating */}
       <Section label="Rating" open={open.ratings} onToggle={() => sec('ratings')}>
-        <p className="text-[9px] text-text-dim mb-1.5">✓ include · ✕ exclude</p>
         {ANIME_RATINGS.map(r => (
           <Check3 key={r.value} state={getS(r.value, filters.ratings, filters.excludeRatings || [])}
             label={r.label} onChange={() => cycleRating(r.value)} />
         ))}
       </Section>
 
-      {/* Status — 3-state */}
+      {/* Status */}
       <Section label="Status" open={open.statuses} onToggle={() => sec('statuses')}>
-        <p className="text-[9px] text-text-dim mb-1.5">✓ include · ✕ exclude</p>
         {ANIME_STATUSES.map(s => (
           <Check3 key={s.value} state={getS(s.value, filters.statuses, filters.excludeStatuses || [])}
             label={s.label} onChange={() => cycleStatus(s.value)} />
         ))}
       </Section>
 
-      {/* Year — 3-state */}
+      {/* Year */}
       <Section label="Year" open={open.years} onToggle={() => sec('years')}>
-        <p className="text-[9px] text-text-dim mb-1.5">✓ include · ✕ exclude</p>
         <div className="max-h-40 overflow-y-auto pr-0.5 flex flex-col gap-0.5">
           {YEARS.map(y => (
             <Check3 key={y} state={getS(y, filters.years, filters.excludeYears || [])}
@@ -130,17 +131,6 @@ function Section({ label, open, onToggle, children }: { label: string; open: boo
       </button>
       {open && <div className="px-3 py-2 bg-card flex flex-col gap-0.5 animate-fade-in">{children}</div>}
     </div>
-  )
-}
-
-function Check2({ checked, label, onChange }: { checked: boolean; label: string; onChange: () => void }) {
-  return (
-    <label className="flex items-center gap-2 py-0.5 cursor-pointer group select-none" onClick={e => { e.preventDefault(); onChange() }}>
-      <div className={clsx('w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 transition-all', checked ? 'bg-accent border-accent' : 'border-white/20 group-hover:border-white/40')}>
-        {checked && <svg className="w-2.5 h-2.5 text-white" viewBox="0 0 10 10"><path d="M2 5l2.5 2.5L8 3" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>}
-      </div>
-      <span className={clsx('text-[11px] transition-colors leading-tight', checked ? 'text-accent font-600' : 'text-text-muted group-hover:text-text-base')}>{label}</span>
-    </label>
   )
 }
 

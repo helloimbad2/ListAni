@@ -66,23 +66,27 @@ export default function Home() {
       {/* ── Hero — Image-1 style cinematic banner ────────────────────── */}
       <section className="relative overflow-hidden border-b border-white/[0.06]" style={{ minHeight: 420 }}>
 
-        {/* Anime artwork fills right portion of the banner */}
+        {/* Orange accent glow — top-left, same as Image 2 */}
+        <div className="absolute inset-0 pointer-events-none z-10"
+          style={{ background: 'radial-gradient(ellipse 60% 50% at 0% 0%, rgba(232,99,10,0.18) 0%, transparent 70%)' }} />
+
+        {/* Anime artwork — fills right 65%, barely touched by gradient */}
         {currentHero && (
-          <div key={currentHero.mal_id} className="absolute right-0 top-0 bottom-0 hero-fade" style={{ width: '62%' }}>
+          <div key={currentHero.mal_id} className="absolute right-0 top-0 bottom-0 hero-fade" style={{ width: '65%' }}>
             <img
               src={getImageUrl(currentHero, 'large')}
               alt=""
-              className="w-full h-full object-cover object-top"
+              className="w-full h-full object-cover object-center"
             />
-            {/* Gradient from left so text is always readable */}
-            <div className="absolute inset-0 bg-gradient-to-r from-bg via-bg/75 to-transparent" />
-            {/* Vignette at top */}
-            <div className="absolute inset-0 bg-gradient-to-b from-bg/50 via-transparent to-bg/30" />
+            {/* Only a narrow left-edge fade so art stays fully visible */}
+            <div className="absolute inset-0 pointer-events-none"
+              style={{ background: 'linear-gradient(to right, #080811 0%, rgba(8,8,17,0.55) 18%, rgba(8,8,17,0.1) 38%, transparent 58%)' }} />
           </div>
         )}
 
-        {/* Overall dark gradient background — keeps left side always dark */}
-        <div className="absolute inset-0 bg-gradient-to-br from-bg via-[#0c0d18] to-bg/80 pointer-events-none" />
+        {/* Dark base only on the left text area */}
+        <div className="absolute inset-0 pointer-events-none"
+          style={{ background: 'linear-gradient(to right, #080811 0%, #080811 28%, rgba(8,8,17,0.6) 42%, transparent 60%)' }} />
 
         {/* Content */}
         <div className="relative max-w-7xl mx-auto px-4 flex items-center" style={{ minHeight: 420 }}>

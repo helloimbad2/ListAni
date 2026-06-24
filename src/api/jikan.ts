@@ -81,7 +81,8 @@ export async function fetchAnime(
     params.start_date = `${sorted[0]}-01-01`
     params.end_date = `${sorted[sorted.length - 1]}-12-31`
   }
-  if (!filters.query && filters.order_by) { params.order_by = filters.order_by; params.sort = filters.sort }
+  // Apply ordering — always honour explicit order_by; omit only when caller didn't pass one
+  if (filters.order_by) { params.order_by = filters.order_by; if (filters.sort) params.sort = filters.sort }
   const res: JikanResponse<Anime[]> = await req('/anime', params)
   return { ...res, data: dedupe(res.data || []) }
 }
