@@ -1,44 +1,37 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Bookmark, Check, Star } from 'lucide-react';
-import { Anime } from '../types';
-import { useStore } from '../store/useStore';
-import { getImageUrl } from '../api/jikan';
-import clsx from 'clsx';
+import { memo } from 'react'
+import { Link } from 'react-router-dom'
+import { Bookmark, Check, Star } from 'lucide-react'
+import { Anime } from '../types'
+import { useStore } from '../store/useStore'
+import { getImageUrl } from '../api/jikan'
+import clsx from 'clsx'
 
 interface Props {
-  anime: Anime;
-  rank?: number;
-  showStatus?: boolean;
-  isUpcoming?: boolean;
+  anime: Anime
+  rank?: number
+  showStatus?: boolean
+  isUpcoming?: boolean
 }
 
-export default function AnimeCard({ anime, rank, showStatus = false, isUpcoming = false }: Props) {
-  const [imgErr, setImgErr] = useState(false);
-  const watchlist = useStore((s) => s.watchlist);
-  const finished = useStore((s) => s.finished);
-  const toggleWatchlist = useStore((s) => s.toggleWatchlist);
-  const toggleFinished = useStore((s) => s.toggleFinished);
+function AnimeCard({ anime, rank, showStatus = false, isUpcoming = false }: Props) {
+  // Per-card selectors — only this card re-renders when ITS status changes
+  const inWatchlist = useStore(s => s.watchlist.includes(anime.mal_id))
+  const isFinished  = useStore(s => s.finished.includes(anime.mal_id))
+  const toggleWatchlist = useStore(s => s.toggleWatchlist)
+  const toggleFinished  = useStore(s => s.toggleFinished)
 
-  const inWatchlist = watchlist.includes(anime.mal_id);
-  const isFinished = finished.includes(anime.mal_id);
-
-  const imgUrl = getImageUrl(anime, 'medium');
-  const largeUrl = getImageUrl(anime, 'large');
-  const displayTitle = anime.title_english || anime.title;
-  const score = anime.score;
+  const imgUrl      = getImageUrl(anime, 'large')
+  const displayTitle = anime.title_english || anime.title
+  const score       = anime.score
 
   const handleWatchlist = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    toggleWatchlist(anime);
-  };
-
+    e.preventDefault(); e.stopPropagation()
+    toggleWatchlist(anime)
+  }
   const handleFinished = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!isUpcoming) toggleFinished(anime);
-  };
+    e.preventDefault(); e.stopPropagation()
+    if (!isUpcoming) toggleFinished(anime)
+  }
 
   return (
     <Link
@@ -60,24 +53,18 @@ export default function AnimeCard({ anime, rank, showStatus = false, isUpcoming 
         </div>
       )}
 
-      {/* Image — full contain */}
+      {/* Image */}
       <div className="relative w-full aspect-[2/3] bg-[#0a0b12] overflow-hidden">
-        {!imgErr ? (
-          <img
-            src={largeUrl || imgUrl}
-            alt={displayTitle}
-            onError={() => setImgErr(true)}
-            className="anime-img-contain transition-transform duration-300 group-hover:scale-[1.03]"
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <span className="font-display text-text-dim text-sm text-center px-4">{displayTitle}</span>
-          </div>
-        )}
-        {/* Gradient overlay */}
-        <div className="absolute inset-0 bg-card-gradient pointer-events-none" />
+        <img
+          src={imgUrl}
+          alt={displayTitle}
+          loading="lazy"
+          decoding="async"
+          className="anime-img-contain transition-transform duration-300 group-hover:scale-[1.03]"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#080811]/90 via-transparent to-transparent pointer-events-none" />
 
-        {/* Action buttons — appear on hover */}
+        {/* Action buttons on hover */}
         <div className="absolute bottom-2 left-2 right-2 flex gap-1.5 opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-200">
           <button
             onClick={handleWatchlist}
@@ -120,32 +107,26 @@ export default function AnimeCard({ anime, rank, showStatus = false, isUpcoming 
               {anime.type}
             </span>
           )}
-          {anime.genres?.slice(0, 2).map((g) => (
+          {anime.genres?.slice(0, 2).map(g => (
             <span key={g.mal_id} className="text-[10px] text-text-muted">{g.name}</span>
           ))}
         </div>
 
-        {/* Status indicators */}
-        <div className="flex gap-1 mt-0.5">
+        <div className="flex gap-1 mt-0.5 flex-wrap">
           {isFinished && (
-            <span className="text-[10px] font-600 px-1.5 py-0.5 rounded bg-emerald-600/15 text-emerald-400 border border-emerald-600/20">
-              ✓ Finished
-            </span>
+            <span className="text-[10px] font-600 px-1.5 py-0.5 rounded bg-emerald-600/15 text-emerald-400 border border-emerald-600/20">✓ Finished</span>
           )}
           {inWatchlist && !isFinished && (
-            <span className="text-[10px] font-600 px-1.5 py-0.5 rounded bg-accent/15 text-accent border border-accent/20">
-              ⊕ Watchlist
-            </span>
+            <span className="text-[10px] font-600 px-1.5 py-0.5 rounded bg-accent/15 text-accent border border-accent/20">⊕ Watchlist</span>
           )}
-          {showStatus && anime.status && (
-            <span className={clsx('text-[10px] font-600 px-1.5 py-0.5 rounded border',
-              anime.airing ? 'bg-green-500/10 text-green-400 border-green-500/20' : 'bg-white/[0.04] text-text-muted border-white/[0.06]'
-            )}>
-              {anime.airing ? '● Airing' : anime.status}
-            </span>
+          {showStatus && anime.airing && (
+            <span className="text-[10px] font-600 px-1.5 py-0.5 rounded bg-green-500/10 text-green-400 border border-green-500/20">● Airing</span>
           )}
         </div>
       </div>
     </Link>
-  );
+  )
 }
+
+// React.memo: prevents re-render unless this card's props actually changed
+export default memo(AnimeCard)
