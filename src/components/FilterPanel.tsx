@@ -13,7 +13,6 @@ type S3 = 'none' | 'include' | 'exclude'
 function getS<T>(val: T, inc: T[], exc: T[]): S3 {
   return inc.includes(val) ? 'include' : exc.includes(val) ? 'exclude' : 'none'
 }
-
 function cycleArr<T>(val: T, inc: T[], exc: T[]): { inc: T[]; exc: T[] } {
   const s = getS(val, inc, exc)
   if (s === 'none')    return { inc: [...inc, val], exc }
@@ -27,7 +26,10 @@ export default function FilterPanel({ filters, onChange }: Props) {
   })
   const sec = (k: string) => setOpen(s => ({ ...s, [k]: !s[k] }))
 
-  const cycleList   = (v: 'watchlist' | 'finished') => { const r = cycleArr(v, filters.listInclude || [], filters.listExclude || []); onChange({ ...filters, listInclude: r.inc, listExclude: r.exc }) }
+  const cycleList = (v: 'watchlist' | 'finished') => {
+    const r = cycleArr(v, filters.listInclude || [], filters.listExclude || [])
+    onChange({ ...filters, listInclude: r.inc, listExclude: r.exc })
+  }
   const cycleGenre  = (id: number) => { const r = cycleArr(id, filters.genres,   filters.excludeGenres   || []); onChange({ ...filters, genres:   r.inc, excludeGenres:   r.exc }) }
   const cycleType   = (t: string)  => { const r = cycleArr(t,  filters.types,    filters.excludeTypes    || []); onChange({ ...filters, types:    r.inc, excludeTypes:    r.exc }) }
   const cycleRating = (v: string)  => { const r = cycleArr(v,  filters.ratings,  filters.excludeRatings  || []); onChange({ ...filters, ratings:  r.inc, excludeRatings:  r.exc }) }
@@ -47,8 +49,7 @@ export default function FilterPanel({ filters, onChange }: Props) {
     ...filters,
     genres: [], excludeGenres: [], types: [], excludeTypes: [],
     ratings: [], excludeRatings: [], statuses: [], excludeStatuses: [],
-    years: [], excludeYears: [],
-    listInclude: [], listExclude: [],
+    years: [], excludeYears: [], listInclude: [], listExclude: [],
   })
 
   return (
@@ -62,19 +63,11 @@ export default function FilterPanel({ filters, onChange }: Props) {
         )}
       </div>
 
-      {/* My List — now 3-state */}
       <Section label="My List" open={open.userList} onToggle={() => sec('userList')}>
-        <Check3
-          state={getS<'watchlist' | 'finished'>('watchlist', filters.listInclude || [], filters.listExclude || [])}
-          label="Watchlist"
-          onChange={() => cycleList('watchlist')} />
-        <Check3
-          state={getS<'watchlist' | 'finished'>('finished', filters.listInclude || [], filters.listExclude || [])}
-          label="Finished Watching"
-          onChange={() => cycleList('finished')} />
+        <Check3 state={getS<'watchlist'|'finished'>('watchlist', filters.listInclude||[], filters.listExclude||[])} label="Watchlist"        onChange={() => cycleList('watchlist')} />
+        <Check3 state={getS<'watchlist'|'finished'>('finished',  filters.listInclude||[], filters.listExclude||[])} label="Finished Watching" onChange={() => cycleList('finished')} />
       </Section>
 
-      {/* Genre */}
       <Section label="Genre" open={open.genres} onToggle={() => sec('genres')}>
         <div className="max-h-52 overflow-y-auto pr-0.5 flex flex-col gap-0.5">
           {GENRES.map((g, i) => (
@@ -85,37 +78,21 @@ export default function FilterPanel({ filters, onChange }: Props) {
         </div>
       </Section>
 
-      {/* Type */}
       <Section label="Type" open={open.types} onToggle={() => sec('types')}>
-        {ANIME_TYPES.map(t => (
-          <Check3 key={t} state={getS(t, filters.types, filters.excludeTypes || [])}
-            label={t} onChange={() => cycleType(t)} />
-        ))}
+        {ANIME_TYPES.map(t => <Check3 key={t} state={getS(t, filters.types, filters.excludeTypes||[])} label={t} onChange={() => cycleType(t)} />)}
       </Section>
 
-      {/* Rating */}
       <Section label="Rating" open={open.ratings} onToggle={() => sec('ratings')}>
-        {ANIME_RATINGS.map(r => (
-          <Check3 key={r.value} state={getS(r.value, filters.ratings, filters.excludeRatings || [])}
-            label={r.label} onChange={() => cycleRating(r.value)} />
-        ))}
+        {ANIME_RATINGS.map(r => <Check3 key={r.value} state={getS(r.value, filters.ratings, filters.excludeRatings||[])} label={r.label} onChange={() => cycleRating(r.value)} />)}
       </Section>
 
-      {/* Status */}
       <Section label="Status" open={open.statuses} onToggle={() => sec('statuses')}>
-        {ANIME_STATUSES.map(s => (
-          <Check3 key={s.value} state={getS(s.value, filters.statuses, filters.excludeStatuses || [])}
-            label={s.label} onChange={() => cycleStatus(s.value)} />
-        ))}
+        {ANIME_STATUSES.map(s => <Check3 key={s.value} state={getS(s.value, filters.statuses, filters.excludeStatuses||[])} label={s.label} onChange={() => cycleStatus(s.value)} />)}
       </Section>
 
-      {/* Year */}
       <Section label="Year" open={open.years} onToggle={() => sec('years')}>
         <div className="max-h-40 overflow-y-auto pr-0.5 flex flex-col gap-0.5">
-          {YEARS.map(y => (
-            <Check3 key={y} state={getS(y, filters.years, filters.excludeYears || [])}
-              label={String(y)} onChange={() => cycleYear(y)} />
-          ))}
+          {YEARS.map(y => <Check3 key={y} state={getS(y, filters.years, filters.excludeYears||[])} label={String(y)} onChange={() => cycleYear(y)} />)}
         </div>
       </Section>
     </aside>

@@ -86,8 +86,8 @@ export interface FilterState {
   ratings: string[];        excludeRatings: string[]
   statuses: string[];       excludeStatuses: string[]
   years: number[];          excludeYears: number[]
-  listInclude: ('watchlist' | 'finished')[]   // show only anime in these lists
-  listExclude: ('watchlist' | 'finished')[]   // hide anime in these lists
+  listInclude: ('watchlist' | 'finished')[]
+  listExclude: ('watchlist' | 'finished')[]
   sortBy: SortOption
   query: string
 }

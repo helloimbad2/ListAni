@@ -16,10 +16,10 @@ function sortParams(s: SortOption): { order_by?: string; sort?: string } {
   return {}
 }
 
-function applyExclusions(anime: Anime[], f: FilterState): Anime[] {
-  return anime.filter(a => {
-    if (f.excludeTypes?.length && f.excludeTypes.includes(a.type || '')) return false
-    if (f.excludeRatings?.length && f.excludeRatings.some(r => (a.rating || '').toLowerCase().startsWith(r))) return false
+function applyExclusions(list: Anime[], f: FilterState): Anime[] {
+  return list.filter(a => {
+    if (f.excludeTypes?.length   && f.excludeTypes.includes(a.type || ''))                                   return false
+    if (f.excludeRatings?.length && f.excludeRatings.some(r => (a.rating||'').toLowerCase().startsWith(r))) return false
     if (f.excludeStatuses?.length) {
       const st = a.airing ? 'airing' : a.status === 'Not yet aired' ? 'upcoming' : 'complete'
       if (f.excludeStatuses.includes(st)) return false
@@ -29,13 +29,11 @@ function applyExclusions(anime: Anime[], f: FilterState): Anime[] {
   })
 }
 
-function applyListFilter(anime: Anime[], f: FilterState, watchlist: number[], finished: number[]): Anime[] {
-  const inc = f.listInclude || []
-  const exc = f.listExclude || []
-  if (!inc.length && !exc.length) return anime
-  return anime.filter(a => {
-    const inW = watchlist.includes(a.mal_id)
-    const inF = finished.includes(a.mal_id)
+function applyListFilter(list: Anime[], f: FilterState, watchlist: number[], finished: number[]): Anime[] {
+  const inc = f.listInclude || [], exc = f.listExclude || []
+  if (!inc.length && !exc.length) return list
+  return list.filter(a => {
+    const inW = watchlist.includes(a.mal_id), inF = finished.includes(a.mal_id)
     if (inc.length && !inc.some(l => l === 'watchlist' ? inW : inF)) return false
     if (exc.length &&  exc.some(l => l === 'watchlist' ? inW : inF)) return false
     return true
@@ -44,16 +42,13 @@ function applyListFilter(anime: Anime[], f: FilterState, watchlist: number[], fi
 
 export default function CatalogPage() {
   const [searchParams, setSearchParams] = useSearchParams()
-  const [anime, setAnime]   = useState<Anime[]>([])
-  const [loading, setLoading] = useState(false)
-  const [page, setPage]     = useState(1)
-  const [hasMore, setHasMore] = useState(true)
+  const [anime, setAnime]         = useState<Anime[]>([])
+  const [loading, setLoading]     = useState(false)
+  const [page, setPage]           = useState(1)
+  const [hasMore, setHasMore]     = useState(true)
   const [showFilters, setShowFilters] = useState(true)
-  const [sortOpen, setSortOpen] = useState(false)
-  const [filters, setFilters] = useState<FilterState>({
-    ...DEFAULT_FILTERS,
-    query: searchParams.get('q') || '',
-  })
+  const [sortOpen, setSortOpen]   = useState(false)
+  const [filters, setFilters]     = useState<FilterState>({ ...DEFAULT_FILTERS, query: searchParams.get('q') || '' })
   const debounceRef = useRef<ReturnType<typeof setTimeout>>()
   const cacheAnimes = useStore(s => s.cacheAnimes)
   const watchlist   = useStore(s => s.watchlist)
@@ -61,32 +56,19 @@ export default function CatalogPage() {
   const animeCache  = useStore(s => s.animeCache)
 
   const hasAPIFilter = (f: FilterState) =>
-    !!(f.query || f.genres.length || (f.excludeGenres?.length || 0) ||
+    !!(f.query || f.genres.length || (f.excludeGenres?.length||0) ||
        f.types.length || f.ratings.length || f.statuses.length || f.years.length)
 
   const load = useCallback(async (f: FilterState, p: number) => {
     setLoading(true)
     try {
       const sp = sortParams(f.sortBy)
-      let res
-
-      if (!hasAPIFilter(f)) {
-        // No text/genre filter: use /anime with ordering so ALL anime are reachable
-        // (fetchTopAnime only returns top-rated; recently-finished anime wouldn't appear)
-        // Exception: if user explicitly chose "Rating" sort, use top/anime endpoint
-        if (f.sortBy === 'rating') {
-          res = await fetchTopAnime(p, 25)
-        } else {
-          res = await fetchAnime({ page: p, limit: 25, ...sp })
-        }
-      } else {
-        res = await fetchAnime({ ...f, page: p, limit: 25, ...sp })
-      }
-
-      const raw  = res.data || []
-      const data = applyExclusions(raw, f)
+      const res = (!hasAPIFilter(f) && f.sortBy === 'rating')
+        ? await fetchTopAnime(p, 25)
+        : await fetchAnime({ ...f, page: p, limit: 25, ...sp })
+      const raw = res.data || []
       cacheAnimes(raw)
-      setAnime(prev => p === 1 ? data : [...prev, ...data])
+      setAnime(prev => p === 1 ? applyExclusions(raw, f) : [...prev, ...applyExclusions(raw, f)])
       setHasMore(res.pagination?.has_next_page ?? false)
     } catch (e) { console.error(e) }
     finally { setLoading(false) }
@@ -99,10 +81,7 @@ export default function CatalogPage() {
 
   useEffect(() => {
     clearTimeout(debounceRef.current)
-    debounceRef.current = setTimeout(
-      () => { setPage(1); setAnime([]); load(filters, 1) },
-      filters.query ? 500 : 0
-    )
+    debounceRef.current = setTimeout(() => { setPage(1); setAnime([]); load(filters, 1) }, filters.query ? 500 : 0)
     return () => clearTimeout(debounceRef.current)
   }, [filters, load])
 
@@ -113,15 +92,9 @@ export default function CatalogPage() {
   const handleSort = (s: SortOption) => { setSortOpen(false); handleFilterChange({ ...filters, sortBy: s }) }
   const loadMore = () => { const next = page + 1; setPage(next); load(filters, next) }
 
-  const hasListFilter = (filters.listInclude?.length || 0) + (filters.listExclude?.length || 0) > 0
-
-  // When My List filter active: pull from cache to find watchlisted/finished anime
-  const baseAnime = hasListFilter && anime.length === 0 && !loading
-    ? Object.values(animeCache)
-    : anime
-
+  const hasListFilter = (filters.listInclude?.length||0) + (filters.listExclude?.length||0) > 0
+  const baseAnime = hasListFilter && anime.length === 0 && !loading ? Object.values(animeCache) : anime
   const listAnime = applyListFilter(baseAnime, filters, watchlist, finished)
-
   const currentSortLabel = SORT_OPTIONS.find(o => o.value === filters.sortBy)?.label ?? 'Sort'
 
   return (
@@ -132,7 +105,6 @@ export default function CatalogPage() {
           <span className="text-text-muted text-sm">Browse & filter all anime</span>
         </div>
 
-        {/* Search + Sort row */}
         <div className="flex items-center gap-2 mb-4">
           <div className="relative flex-1 max-w-lg">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted pointer-events-none" />
@@ -143,86 +115,59 @@ export default function CatalogPage() {
               className="w-full bg-surface border border-white/[0.07] rounded-xl pl-9 pr-9 py-2.5 text-sm text-text-base placeholder:text-text-muted focus:border-accent/50 transition-colors"
             />
             {filters.query && (
-              <button
-                onClick={() => handleFilterChange({ ...filters, query: '' })}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-base"
-              >
+              <button onClick={() => handleFilterChange({ ...filters, query: '' })}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-base">
                 <X className="w-4 h-4" />
               </button>
             )}
           </div>
-
           <div className="relative shrink-0">
-            <button
-              onClick={() => setSortOpen(o => !o)}
-              className="flex items-center gap-1.5 px-3 py-2.5 bg-surface border border-white/[0.07] rounded-xl text-sm text-text-muted hover:border-white/[0.15] hover:text-text-base transition-colors font-display font-600"
-            >
+            <button onClick={() => setSortOpen(o => !o)}
+              className="flex items-center gap-1.5 px-3 py-2.5 bg-surface border border-white/[0.07] rounded-xl text-sm text-text-muted hover:border-white/[0.15] hover:text-text-base transition-colors font-display font-600">
               {currentSortLabel} <ChevronDown className="w-3.5 h-3.5" />
             </button>
             {sortOpen && (
               <div className="absolute top-full right-0 mt-1 bg-card border border-white/[0.1] rounded-xl shadow-xl z-20 py-1 min-w-[140px] animate-fade-in">
                 {SORT_OPTIONS.map(o => (
-                  <button
-                    key={o.value}
-                    onClick={() => handleSort(o.value)}
+                  <button key={o.value} onClick={() => handleSort(o.value)}
                     className={`w-full text-left px-3 py-2 text-xs font-display font-600 transition-colors ${
-                      filters.sortBy === o.value
-                        ? 'text-accent bg-accent/10'
-                        : 'text-text-muted hover:text-text-base hover:bg-white/[0.04]'
-                    }`}
-                  >
-                    {o.label}
-                  </button>
+                      filters.sortBy === o.value ? 'text-accent bg-accent/10' : 'text-text-muted hover:text-text-base hover:bg-white/[0.04]'
+                    }`}>{o.label}</button>
                 ))}
               </div>
             )}
           </div>
         </div>
 
-        <button
-          className="md:hidden flex items-center gap-2 btn-ghost px-3 py-2 rounded-xl text-sm mb-4"
-          onClick={() => setShowFilters(s => !s)}
-        >
+        <button className="md:hidden flex items-center gap-2 btn-ghost px-3 py-2 rounded-xl text-sm mb-4"
+          onClick={() => setShowFilters(s => !s)}>
           <SlidersHorizontal className="w-4 h-4" />
           {showFilters ? 'Hide Filters' : 'Show Filters'}
         </button>
 
         <div className="flex gap-6">
-          {showFilters && (
-            <div className="shrink-0">
-              <FilterPanel filters={filters} onChange={handleFilterChange} />
-            </div>
-          )}
-
+          {showFilters && <div className="shrink-0"><FilterPanel filters={filters} onChange={handleFilterChange} /></div>}
           <div className="flex-1 min-w-0">
-            {!loading && (
-              <p className="text-text-muted text-xs mb-4">
-                {filters.query ? `Results for "${filters.query}"` : 'Showing all anime'}
-              </p>
-            )}
-
-            {loading && anime.length === 0 ? (
-              <GridSkeleton count={25} />
-            ) : listAnime.length === 0 ? (
-              <div className="flex flex-col items-center py-24 text-center">
-                <p className="font-display font-600 text-text-base mb-1">No anime found</p>
-                <p className="text-text-muted text-sm">Try adjusting your filters or search terms</p>
-              </div>
-            ) : (
-              <>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-                  {listAnime.map(a => <AnimeCard key={a.mal_id} anime={a} showStatus />)}
+            {!loading && <p className="text-text-muted text-xs mb-4">{filters.query ? `Results for "${filters.query}"` : 'Showing all anime'}</p>}
+            {loading && anime.length === 0 ? <GridSkeleton count={25} />
+              : listAnime.length === 0 ? (
+                <div className="flex flex-col items-center py-24 text-center">
+                  <p className="font-display font-600 text-text-base mb-1">No anime found</p>
+                  <p className="text-text-muted text-sm">Try adjusting your filters or search terms</p>
                 </div>
-                {hasMore && !loading && !hasListFilter && (
-                  <div className="mt-8 flex justify-center">
-                    <button onClick={loadMore} className="btn-accent px-6 py-2.5 rounded-xl text-sm">
-                      Load More
-                    </button>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+                    {listAnime.map(a => <AnimeCard key={a.mal_id} anime={a} showStatus />)}
                   </div>
-                )}
-                {loading && anime.length > 0 && <div className="mt-8"><GridSkeleton count={6} /></div>}
-              </>
-            )}
+                  {hasMore && !loading && !hasListFilter && (
+                    <div className="mt-8 flex justify-center">
+                      <button onClick={loadMore} className="btn-accent px-6 py-2.5 rounded-xl text-sm">Load More</button>
+                    </div>
+                  )}
+                  {loading && anime.length > 0 && <div className="mt-8"><GridSkeleton count={6} /></div>}
+                </>
+              )}
           </div>
         </div>
       </div>

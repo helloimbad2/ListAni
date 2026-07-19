@@ -4,15 +4,22 @@ const BASE = 'https://api.jikan.moe/v4'
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms))
 
 // ── Promise-chain rate limiter ────────────────────────────────────────
-// Each request starts only after the previous completes + 300 ms cooldown.
-// 300 ms is safe (Jikan allows 3 req/sec burst; 300 ms ≈ 3.3/sec at worst).
-// Using promise chaining instead of a queue avoids race conditions entirely.
-let chain: Promise<unknown> = Promise.resolve()
+// Works by chaining each request onto the previous one + 350 ms gap.
+// Critically: the chain always resolves (never rejects) so a failed
+// request can never "freeze" the queue for subsequent callers.
+//
+// Old FIFO queue bug: if item.fn() threw AND drain() was mid-loop,
+// qRunning stayed true and ALL future requests were silently dropped.
+let chain: Promise<void> = Promise.resolve()
 
-async function apiFetch<T>(url: string): Promise<T> {
-  let res = await fetch(url)
-  if (res.status === 429) { await sleep(2000); res = await fetch(url) }
-  if (!res.ok) throw new Error(`Jikan ${res.status}`)
+async function apiFetch<T>(url: string, attempt = 0): Promise<T> {
+  const res = await fetch(url)
+  if (res.status === 429) {
+    if (attempt >= 2) throw new Error('Rate limited after retries')
+    await sleep(2500)
+    return apiFetch<T>(url, attempt + 1)
+  }
+  if (!res.ok) throw new Error(`Jikan ${res.status}: ${url}`)
   return res.json() as Promise<T>
 }
 
@@ -21,19 +28,36 @@ function req<T>(path: string, params: Record<string, string | number | boolean |
   Object.entries(params).forEach(([k, v]) => {
     if (v !== undefined && v !== null && v !== '') url.searchParams.set(k, String(v))
   })
-  const str = url.toString()
-  const task = chain.then(() => apiFetch<T>(str))
-  chain = task.then(() => sleep(300), () => sleep(300))
-  return task
+  const urlStr = url.toString()
+
+  return new Promise<T>((resolve, reject) => {
+    // Append this request to the chain. The chain itself never rejects
+    // (errors are caught and forwarded to the individual promise).
+    chain = chain.then(async () => {
+      try {
+        resolve(await apiFetch<T>(urlStr))
+      } catch (e) {
+        reject(e)
+      }
+      // Always wait before the next request, even on error
+      await sleep(350)
+    })
+  })
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────
 function dedupe(arr: Anime[]): Anime[] {
   const seen = new Set<number>()
-  return arr.filter(a => { if (seen.has(a.mal_id)) return false; seen.add(a.mal_id); return true })
+  return arr.filter(a => {
+    if (seen.has(a.mal_id)) return false
+    seen.add(a.mal_id)
+    return true
+  })
 }
 
-// Client-side adult filter: only strip genuine hentai (Rx), allow R+
+// Only filter genuine hentai (Rx rating). Do NOT use sfw=true API param
+// because it also strips many legitimate R+ (ecchi) and even some R17 shows,
+// causing "anime not found" reports like the one that prompted this fix.
 function isSFW(a: Anime): boolean {
   const r = (a.rating || '').toLowerCase()
   return !r.startsWith('rx')
@@ -52,31 +76,39 @@ export async function fetchTopAnime(page = 1, limit = 25): Promise<JikanResponse
 
 export async function fetchTopByGenres(genreIds: number[], limit = 10): Promise<Anime[]> {
   const res = await req<JikanResponse<Anime[]>>('/anime', {
-    genres: genreIds.join(','), order_by: 'score', sort: 'desc', limit: limit + 3,
+    genres: genreIds.join(','),
+    order_by: 'score',
+    sort: 'desc',
+    limit: Math.min(limit + 4, 25),
   })
   return clean(res.data || []).slice(0, limit)
 }
 
 export async function fetchAnime(
-  filters: Partial<FilterState> & { page?: number; limit?: number; order_by?: string; sort?: string }
+  filters: Partial<FilterState> & {
+    page?: number; limit?: number; order_by?: string; sort?: string
+  }
 ): Promise<JikanResponse<Anime[]>> {
   const p: Record<string, string | number | undefined> = {
-    page: filters.page ?? 1,
+    page:  filters.page  ?? 1,
     limit: filters.limit ?? 25,
   }
-  if (filters.query?.trim()) p.q = filters.query.trim()
-  if (filters.types?.length === 1)   p.type   = filters.types[0].toLowerCase()
-  if (filters.ratings?.length === 1) p.rating  = filters.ratings[0]
-  if (filters.statuses?.length === 1) p.status = filters.statuses[0]
-  if (filters.genres?.length)        p.genres  = filters.genres.join(',')
-  if (filters.excludeGenres?.length) p.genres_exclude = filters.excludeGenres.join(',')
+  if (filters.query?.trim())          p.q             = filters.query.trim()
+  if (filters.types?.length === 1)    p.type          = filters.types[0].toLowerCase()
+  if (filters.ratings?.length === 1)  p.rating        = filters.ratings[0]
+  if (filters.statuses?.length === 1) p.status        = filters.statuses[0]
+  if (filters.genres?.length)         p.genres        = filters.genres.join(',')
+  if (filters.excludeGenres?.length)  p.genres_exclude = filters.excludeGenres.join(',')
   if (filters.years?.length) {
     const s = [...filters.years].sort()
     p.start_date = `${s[0]}-01-01`
     p.end_date   = `${s[s.length - 1]}-12-31`
   }
-  // Always honour explicit ordering (even during text search)
-  if (filters.order_by) { p.order_by = filters.order_by; if (filters.sort) p.sort = filters.sort }
+  // Always apply ordering when provided (not just when no query)
+  if (filters.order_by) {
+    p.order_by = filters.order_by
+    if (filters.sort) p.sort = filters.sort
+  }
   const res = await req<JikanResponse<Anime[]>>('/anime', p)
   return { ...res, data: clean(res.data || []) }
 }
@@ -111,12 +143,13 @@ export async function fetchSimilarAnime(genres: number[], excludeId: number, lim
   } catch { return [] }
 }
 
-// No rate limit needed — different API (AniList allows 90 req/min)
+// Search: no order_by override — Jikan relevance ranking is best for text queries
 export async function searchAnime(q: string, limit = 8): Promise<JikanResponse<Anime[]>> {
   const res = await req<JikanResponse<Anime[]>>('/anime', { q: q.trim(), limit })
   return { ...res, data: clean(res.data || []) }
 }
 
+// AniList banner fetch — completely independent from Jikan, no rate limit shared
 export async function fetchAnilistBanner(malId: number): Promise<string | null> {
   try {
     const res = await fetch('https://graphql.anilist.co', {

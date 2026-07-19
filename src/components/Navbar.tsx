@@ -14,33 +14,28 @@ export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [randomLoading, setRandomLoading] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
-  const wrapRef = useRef<HTMLDivElement>(null)
+  const wrapRef  = useRef<HTMLDivElement>(null)
   const searchTimeout = useRef<ReturnType<typeof setTimeout>>()
   const nav = useNavigate()
   const loc = useLocation()
   const recentlyViewed = useStore(s => s.recentlyViewed)
-  const animeCache = useStore(s => s.animeCache)
+  const animeCache     = useStore(s => s.animeCache)
   const isActive = (p: string) => loc.pathname === p
   useEffect(() => setMobileOpen(false), [loc.pathname])
 
-  // Close dropdown on outside click
+  // Close on outside click
   useEffect(() => {
     const h = (e: MouseEvent) => { if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false) }
     document.addEventListener('mousedown', h)
     return () => document.removeEventListener('mousedown', h)
   }, [])
 
-  // Press S to focus search (when not already typing in an input)
+  // Press S to focus (when not already in an input)
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
       if (e.key === 'Escape') { setOpen(false); inputRef.current?.blur(); return }
-      if (e.key === 's' || e.key === 'S') {
-        const tag = (e.target as HTMLElement).tagName.toLowerCase()
-        if (tag !== 'input' && tag !== 'textarea' && tag !== 'select') {
-          e.preventDefault()
-          inputRef.current?.focus()
-          setOpen(true)
-        }
+      if ((e.key === 's' || e.key === 'S') && !['INPUT','TEXTAREA','SELECT'].includes((e.target as HTMLElement).tagName)) {
+        e.preventDefault(); inputRef.current?.focus(); setOpen(true)
       }
     }
     window.addEventListener('keydown', h)
@@ -80,13 +75,13 @@ export default function Navbar() {
     if (randomLoading) return
     setRandomLoading(true)
     try { const r = await fetchRandomAnime(); nav(`/anime/${r.data.mal_id}`) }
-    catch { alert('Could not fetch a random anime, please try again.') }
+    catch {}
     finally { setRandomLoading(false) }
   }
 
   const recentAnime = recentlyViewed.slice(0, 5).map(id => animeCache[id]).filter(Boolean) as Anime[]
   const displayList = q ? results : recentAnime
-  const showDrop = open && (displayList.length > 0 || searching || (q.length > 0))
+  const showDrop = open && (displayList.length > 0 || searching || q.length > 0)
 
   return (
     <header className="sticky top-0 z-50 border-b border-white/[0.06] bg-bg/95 backdrop-blur-xl">
@@ -104,10 +99,10 @@ export default function Navbar() {
           </span>
         </Link>
 
-        {/* Search — styled like Image 2: dark, subtle, clean */}
+        {/* Search */}
         <div ref={wrapRef} className="relative flex-1 max-w-md">
           <form onSubmit={handleSubmit}>
-            <div className="flex items-center gap-2 bg-[#0f1018] border border-white/[0.06] rounded-xl px-3 py-1.5 focus-within:border-accent/50 transition-colors">
+            <div className="flex items-center gap-2 bg-[#0f1018] border border-white/[0.07] rounded-xl px-3 py-1.5 focus-within:border-accent/50 transition-colors">
               <Search className="w-3.5 h-3.5 text-text-muted shrink-0" />
               <input
                 ref={inputRef}
@@ -117,20 +112,17 @@ export default function Navbar() {
                 onKeyDown={handleKD}
                 placeholder="Search anime..."
                 className="flex-1 bg-transparent text-sm text-text-base placeholder:text-text-muted min-w-0"
-                style={{ outline: 'none', border: 'none', boxShadow: 'none' }}
               />
-              {q
-                ? <button type="button" onClick={() => { setQ(''); setResults([]); inputRef.current?.focus() }}>
-                    <X className="w-3 h-3 text-text-muted hover:text-text-base transition-colors" />
-                  </button>
-                : <kbd className="hidden sm:flex items-center px-1.5 py-0.5 rounded border border-white/[0.08] bg-white/[0.03] text-[9px] font-display text-text-dim shrink-0">
-                    S
-                  </kbd>
-              }
+              {q ? (
+                <button type="button" onClick={() => { setQ(''); setResults([]); inputRef.current?.focus() }}>
+                  <X className="w-3 h-3 text-text-muted hover:text-text-base transition-colors" />
+                </button>
+              ) : (
+                <kbd className="hidden sm:inline-flex items-center px-1.5 py-0.5 rounded border border-white/[0.08] bg-white/[0.03] text-[9px] font-display text-text-dim shrink-0">S</kbd>
+              )}
             </div>
           </form>
 
-          {/* Dropdown */}
           {showDrop && (
             <div className="absolute top-full left-0 right-0 mt-1.5 bg-card border border-white/[0.1] rounded-xl shadow-2xl shadow-black/50 overflow-hidden z-50 animate-fade-in">
               {!q && recentAnime.length > 0 && (
@@ -141,7 +133,7 @@ export default function Navbar() {
               {displayList.map((anime, i) => (
                 <button key={anime.mal_id} onMouseDown={() => goTo(anime.mal_id)}
                   className={`w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors ${i === selected ? 'bg-white/[0.07]' : 'hover:bg-white/[0.04]'}`}>
-                  <img src={getImageUrl(anime, 'small')} alt=""
+                  <img src={getImageUrl(anime, 'small')} alt="" loading="lazy"
                     className="w-6 h-9 object-contain bg-[#0a0b12] rounded shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="font-display font-600 text-xs text-text-base truncate">{anime.title_english || anime.title}</p>
@@ -159,17 +151,16 @@ export default function Navbar() {
           )}
         </div>
 
-        {/* Nav */}
+        {/* Nav links */}
         <nav className="hidden md:flex items-center gap-1">
-          <NavLink to="/catalog" active={isActive('/catalog')}><LayoutGrid className="w-3.5 h-3.5" /> Catalog</NavLink>
-          <NavLink to="/mylist" active={isActive('/mylist')}><List className="w-3.5 h-3.5" /> My List</NavLink>
+          <NavLink to="/catalog"  active={isActive('/catalog')} ><LayoutGrid className="w-3.5 h-3.5" /> Catalog</NavLink>
+          <NavLink to="/mylist"   active={isActive('/mylist')}  ><List className="w-3.5 h-3.5" /> My List</NavLink>
           <NavLink to="/tierlist" active={isActive('/tierlist')}><Trophy className="w-3.5 h-3.5" /> Tier List</NavLink>
         </nav>
 
-        {/* Random anime button */}
-        <button onClick={handleRandom} disabled={randomLoading}
-          title="Random Anime"
-          className="hidden sm:flex items-center justify-center w-8 h-8 rounded-lg border border-white/[0.08] bg-white/[0.04] text-text-muted hover:text-accent hover:border-accent/30 transition-all shrink-0 disabled:opacity-50">
+        {/* Random */}
+        <button onClick={handleRandom} disabled={randomLoading} title="Random Anime"
+          className="hidden sm:flex items-center justify-center w-8 h-8 rounded-lg border border-white/[0.08] bg-white/[0.04] text-text-muted hover:text-accent hover:border-accent/30 transition-all shrink-0 disabled:opacity-40">
           <Shuffle className="w-3.5 h-3.5" />
         </button>
 
@@ -180,7 +171,7 @@ export default function Navbar() {
 
       {mobileOpen && (
         <div className="md:hidden border-t border-white/[0.06] bg-surface px-4 py-3 flex flex-col gap-1">
-          {([['/', 'Home'], ['/catalog', 'Catalog'], ['/mylist', 'My List'], ['/tierlist', 'Tier List']] as [string, string][]).map(([p, l]) => (
+          {([['/', 'Home'], ['/catalog', 'Catalog'], ['/mylist', 'My List'], ['/tierlist', 'Tier List']] as [string,string][]).map(([p, l]) => (
             <Link key={p} to={p} className="px-3 py-2 rounded-lg text-sm text-text-muted hover:text-text-base hover:bg-card transition-colors">{l}</Link>
           ))}
           <button onClick={handleRandom} className="px-3 py-2 rounded-lg text-sm text-text-muted hover:text-accent text-left">🎲 Random Anime</button>
@@ -192,12 +183,9 @@ export default function Navbar() {
 
 function NavLink({ to, active, children }: { to: string; active: boolean; children: React.ReactNode }) {
   return (
-    <Link to={to}
-      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium font-display transition-all ${
-        active ? 'bg-accent/15 text-accent' : 'text-text-muted hover:text-text-base hover:bg-white/[0.04]'
-      }`}
-      style={{ outline: 'none' }}
-    >
+    <Link to={to} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium font-display transition-all ${
+      active ? 'bg-accent/15 text-accent' : 'text-text-muted hover:text-text-base hover:bg-white/[0.04]'
+    }`}>
       {children}
     </Link>
   )

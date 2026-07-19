@@ -1,42 +1,34 @@
 import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowRight, Star, TrendingUp, Calendar, Info } from 'lucide-react'
+import { ArrowRight, Star, TrendingUp, Calendar, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Anime } from '../types'
-import {
-  fetchTopAnime, fetchBrowseAnime, fetchUpcomingAnime,
-  fetchTopByGenres, fetchAnilistBanner, getImageUrl,
-} from '../api/jikan'
+import { fetchTopAnime, fetchBrowseAnime, fetchUpcomingAnime, fetchTopByGenres, getImageUrl } from '../api/jikan'
 import { useStore } from '../store/useStore'
 import AnimeCard from '../components/AnimeCard'
 import GenreFilter from '../components/GenreFilter'
 import { CardSkeleton, GridSkeleton } from '../components/Skeleton'
 
 export default function Home() {
-  const [top10, setTop10]             = useState<Anime[]>([])
-  const [genreAnime, setGenreAnime]   = useState<Anime[]>([])
+  const [top10, setTop10] = useState<Anime[]>([])
+  const [genreAnime, setGenreAnime] = useState<Anime[]>([])
   const [browseAnime, setBrowseAnime] = useState<Anime[]>([])
-  const [upcoming, setUpcoming]       = useState<Anime[]>([])
+  const [upcoming, setUpcoming] = useState<Anime[]>([])
   const [selectedGenres, setSelectedGenres] = useState<number[]>([])
-  const [heroIdx, setHeroIdx]         = useState(0)
-  const [loadingTop, setLoadingTop]   = useState(true)
+  const [heroIdx, setHeroIdx] = useState(0)
+  const [loadingTop, setLoadingTop] = useState(true)
   const [loadingGenre, setLoadingGenre] = useState(false)
   const [loadingBrowse, setLoadingBrowse] = useState(true)
   const [loadingUpcoming, setLoadingUpcoming] = useState(true)
-
-  // Banner cache: malId → URL string (or null if AniList has none)
-  const bannersRef = useRef<Record<number, string | null>>({})
-  const [banners, setBanners] = useState<Record<number, string | null>>({})
-
   const genreReqRef = useRef(0)
-  const heroTimer   = useRef<ReturnType<typeof setInterval>>()
+  const heroTimer = useRef<ReturnType<typeof setInterval>>()
   const cacheAnimes = useStore(s => s.cacheAnimes)
 
-  /* ── Initial data load ───────────────────────────────────────────── */
   useEffect(() => {
     fetchTopAnime(1, 10)
       .then(r => { const d = r.data || []; setTop10(d); cacheAnimes(d) })
       .catch(() => {}).finally(() => setLoadingTop(false))
 
+    // Fetch 14, show 12 to guarantee a full 2-row grid after dedup
     fetchBrowseAnime(1, 14)
       .then(r => { const d = (r.data || []).slice(0, 12); setBrowseAnime(d); cacheAnimes(d) })
       .catch(() => {}).finally(() => setLoadingBrowse(false))
@@ -46,41 +38,22 @@ export default function Home() {
       .catch(() => {}).finally(() => setLoadingUpcoming(false))
   }, [])
 
-  /* ── Hero rotation ────────────────────────────────────────────────── */
-  const heroAnime   = browseAnime.slice(0, 8)
-  const currentHero = heroAnime[heroIdx] ?? null
+  // Hero rotates through browse anime every 5s
+  const heroAnime = browseAnime.length > 0 ? browseAnime.slice(0, 8) : []
+  const currentHero = heroAnime[heroIdx] || null
 
   useEffect(() => {
     if (heroAnime.length < 2) return
-    heroTimer.current = setInterval(() => setHeroIdx(i => (i + 1) % heroAnime.length), 10000)
+    heroTimer.current = setInterval(() => setHeroIdx(i => (i + 1) % heroAnime.length), 5000)
     return () => clearInterval(heroTimer.current)
   }, [heroAnime.length])
 
-  const jumpHero = (i: number) => {
+  const heroNav = (dir: 1 | -1) => {
     clearInterval(heroTimer.current)
-    setHeroIdx(i)
+    setHeroIdx(i => (i + dir + heroAnime.length) % heroAnime.length)
   }
 
-  /* ── Pre-fetch AniList banners for all hero slides ───────────────── */
-  useEffect(() => {
-    heroAnime.forEach(anime => {
-      if (anime.mal_id in bannersRef.current) return   // already fetched
-      bannersRef.current[anime.mal_id] = null          // mark in-flight
-      fetchAnilistBanner(anime.mal_id).then(url => {
-        bannersRef.current[anime.mal_id] = url
-        setBanners(prev => ({ ...prev, [anime.mal_id]: url }))
-      })
-    })
-  }, [heroAnime.length])
-
-  // The banner to display: AniList URL → Jikan large poster fallback
-  const currentBannerUrl =
-    currentHero
-      ? (banners[currentHero.mal_id] ?? null) || getImageUrl(currentHero, 'large')
-      : null
-  const isBannerLandscape = currentHero ? !!banners[currentHero.mal_id] : false
-
-  /* ── Genre filter via API ────────────────────────────────────────── */
+  // Genre filter: fetch from API
   useEffect(() => {
     if (!selectedGenres.length) { setGenreAnime([]); return }
     const rid = ++genreReqRef.current
@@ -90,128 +63,82 @@ export default function Home() {
       .catch(() => {}).finally(() => { if (rid === genreReqRef.current) setLoadingGenre(false) })
   }, [selectedGenres])
 
-  const displayAnime   = selectedGenres.length > 0 ? genreAnime : top10
+  const displayAnime = selectedGenres.length > 0 ? genreAnime : top10
   const displayLoading = selectedGenres.length > 0 ? loadingGenre : loadingTop
 
   return (
     <main className="min-h-screen bg-bg">
 
-      {/* ════════════════════════════════════════════════════
-          HERO — Rounded rectangle, HD landscape banner
-          ════════════════════════════════════════════════════ */}
-      <div className="px-3 pt-3">
-        <div
-          className="relative overflow-hidden rounded-2xl border border-white/[0.08] shadow-2xl shadow-black/60"
-          style={{ height: 400 }}
-        >
-          {/* ── Landscape banner / portrait fallback ───────── */}
-          {currentBannerUrl && (
-            <img
-              key={currentHero?.mal_id}
-              src={currentBannerUrl}
-              alt=""
-              className="absolute inset-0 w-full h-full hero-fade"
-              style={{
-                objectFit: 'cover',
-                // landscape banners: centre; portrait posters: top so faces show
-                objectPosition: isBannerLandscape ? 'center' : 'top center',
-              }}
-            />
+      {/* ── Rotating Hero ─────────────────────────────────── */}
+      <section className="relative overflow-hidden border-b border-white/[0.06]" style={{ minHeight: 320 }}>
+        {/* Background crossfade */}
+        {currentHero && (
+          <div key={currentHero.mal_id} className="absolute inset-0 pointer-events-none hero-fade">
+            <img src={getImageUrl(currentHero, 'large')} alt=""
+              className="w-full h-full object-cover opacity-15 blur-2xl scale-110" />
+            <div className="absolute inset-0 bg-gradient-to-t from-bg via-bg/80 to-bg/40" />
+            <div className="absolute inset-0 bg-gradient-to-r from-bg/80 to-transparent" />
+          </div>
+        )}
+        <div className="absolute inset-0 bg-bg/30 pointer-events-none" />
+
+        <div className="relative max-w-7xl mx-auto px-4 py-12 flex items-end gap-8">
+          {/* Thumbnail */}
+          {currentHero && !loadingBrowse && (
+            <Link to={`/anime/${currentHero.mal_id}`} className="hidden md:block shrink-0 group">
+              <div className="w-28 rounded-xl overflow-hidden border border-white/10 shadow-2xl shadow-black/60 group-hover:scale-105 transition-transform">
+                <img src={getImageUrl(currentHero, 'large')} alt={currentHero.title_english || currentHero.title}
+                  className="w-full object-contain bg-[#0a0b12]" />
+              </div>
+            </Link>
           )}
 
-          {/* ── Left-to-right gradient (text always readable) ─ */}
-          <div
-            className="absolute inset-0"
-            style={{
-              background:
-                'linear-gradient(to right,' +
-                'rgba(8,8,17,0.97) 0%,' +
-                'rgba(8,8,17,0.90) 22%,' +
-                'rgba(8,8,17,0.65) 40%,' +
-                'rgba(8,8,17,0.18) 62%,' +
-                'transparent 80%)',
-            }}
-          />
-
-          {/* ── Bottom vignette for depth ──────────────────── */}
-          <div
-            className="absolute inset-0"
-            style={{ background: 'linear-gradient(to top, rgba(8,8,17,0.55) 0%, transparent 35%)' }}
-          />
-
-          {/* ── Orange accent glow top-left ────────────────── */}
-          <div
-            className="absolute inset-0"
-            style={{ background: 'radial-gradient(ellipse 55% 65% at 0% 0%, rgba(232,99,10,0.18) 0%, transparent 65%)' }}
-          />
-
-          {/* ── Text content ───────────────────────────────── */}
-          <div className="absolute inset-0 flex items-center px-10 py-8">
-            <div className="max-w-xl">
-
-              {/* Badge */}
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-accent/35 bg-accent/12 text-accent text-xs font-display font-600 mb-4">
-                <span className="w-1.5 h-1.5 rounded-full bg-accent" />
-                Your Anime Universe
+          <div className="flex-1">
+            {currentHero && (
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-accent/30 bg-accent/10 text-accent text-xs font-display font-600 mb-3">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+                Airing Now · {currentHero.title_english || currentHero.title}
               </div>
-
-              {/* App tagline */}
-              <h1 className="font-display font-700 text-4xl sm:text-5xl text-text-base leading-tight mb-4">
-                Discover Anime.<br />
-                <span className="text-accent">Rank Your Favorites.</span>
-              </h1>
-
-              {/* Current anime info */}
-              {currentHero && !loadingBrowse && (
-                <div className="mb-5">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse shrink-0" />
-                    <span className="text-[10px] font-display font-600 text-text-muted uppercase tracking-widest">Airing Now</span>
-                  </div>
-                  <p className="font-display font-600 text-lg text-text-base leading-snug mb-1.5">
-                    {currentHero.title_english || currentHero.title}
-                  </p>
-                  {currentHero.synopsis && (
-                    <p className="text-text-muted text-sm leading-relaxed line-clamp-2">
-                      {currentHero.synopsis.replace(/\[Written by MAL Rewrite\]/gi, '').trim()}
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {/* Buttons */}
-              <div className="flex gap-2 flex-wrap">
-                {currentHero && (
-                  <Link
-                    to={`/anime/${currentHero.mal_id}`}
-                    className="btn-accent px-5 py-2.5 rounded-xl text-sm inline-flex items-center gap-1.5"
-                  >
-                    <Info className="w-4 h-4" /> See Information
-                  </Link>
-                )}
-                <Link to="/catalog" className="btn-ghost px-5 py-2.5 rounded-xl text-sm inline-flex items-center gap-1.5">
-                  Browse Catalog <ArrowRight className="w-4 h-4" />
-                </Link>
-              </div>
-
-              {/* Dot indicators */}
-              {heroAnime.length > 1 && (
-                <div className="flex gap-1.5 mt-5">
-                  {heroAnime.map((_, i) => (
-                    <button
-                      key={i}
-                      onClick={() => jumpHero(i)}
-                      className={`rounded-full transition-all duration-300 ${i === heroIdx ? 'w-5 h-1.5 bg-accent' : 'w-1.5 h-1.5 bg-white/25 hover:bg-white/50'}`}
-                      style={{ outline: 'none' }}
-                    />
-                  ))}
-                </div>
-              )}
+            )}
+            <h1 className="font-display font-700 text-4xl sm:text-5xl text-text-base leading-tight mb-3">
+              Discover Anime.<br />
+              <span className="text-accent">Rank Your Favorites.</span>
+            </h1>
+            <p className="text-text-muted text-base leading-relaxed max-w-md mb-5">
+              Browse thousands of titles, curate your watchlist, and build the definitive tier list.
+            </p>
+            <div className="flex gap-2 flex-wrap">
+              <Link to="/catalog" className="btn-accent px-5 py-2.5 rounded-xl text-sm inline-flex items-center gap-1.5">
+                Browse Catalog <ArrowRight className="w-4 h-4" />
+              </Link>
+              <Link to="/tierlist" className="btn-ghost px-5 py-2.5 rounded-xl text-sm">Build Tier List</Link>
             </div>
           </div>
+
+          {/* Hero controls */}
+          {heroAnime.length > 1 && (
+            <div className="hidden md:flex flex-col items-end gap-3 shrink-0 self-end pb-1">
+              <div className="flex items-center gap-1.5">
+                <button onClick={() => heroNav(-1)}
+                  className="w-7 h-7 rounded-lg border border-white/10 bg-white/[0.05] flex items-center justify-center text-text-muted hover:text-text-base hover:bg-white/[0.1] transition-all">
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                </button>
+                <button onClick={() => heroNav(1)}
+                  className="w-7 h-7 rounded-lg border border-white/10 bg-white/[0.05] flex items-center justify-center text-text-muted hover:text-text-base hover:bg-white/[0.1] transition-all">
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              {/* Dot indicators */}
+              <div className="flex gap-1">
+                {heroAnime.map((_, i) => (
+                  <button key={i} onClick={() => { clearInterval(heroTimer.current); setHeroIdx(i) }}
+                    className={`rounded-full transition-all ${i === heroIdx ? 'w-4 h-1.5 bg-accent' : 'w-1.5 h-1.5 bg-white/20 hover:bg-white/40'}`} />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
-      </div>
-      {/* END HERO */}
+      </section>
 
       {/* ── Top 10 / Top by genre ──────────────────────────── */}
       <section className="max-w-7xl mx-auto px-4 py-10">
@@ -225,6 +152,7 @@ export default function Home() {
           {selectedGenres.length === 0 ? 'Ranked by MAL score' : 'Highest-rated for selected genre(s)'}
         </p>
 
+        {/* Genre dropdown — redesigned like Image 1 */}
         <div className="mb-6">
           <GenreFilter selected={selectedGenres} onChange={setSelectedGenres} />
         </div>
@@ -247,7 +175,7 @@ export default function Home() {
         )}
       </section>
 
-      {/* ── Browse Anime ──────────────────────────────────────── */}
+      {/* ── Browse Anime ───────────────────────────────────── */}
       <section className="max-w-7xl mx-auto px-4 py-10 border-t border-white/[0.06]">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
@@ -273,7 +201,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── Upcoming Anime ────────────────────────────────────── */}
+      {/* ── Upcoming Anime ─────────────────────────────────── */}
       <section className="max-w-7xl mx-auto px-4 py-10 border-t border-white/[0.06] pb-16">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
